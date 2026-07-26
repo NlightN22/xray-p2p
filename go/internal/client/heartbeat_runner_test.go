@@ -184,8 +184,8 @@ func TestHeartbeatRunnerReusesControlClient(t *testing.T) {
 	if first == nil || first != second {
 		t.Fatal("expected heartbeat control client to be reused")
 	}
-	if len(runner.clients) != 1 {
-		t.Fatalf("expected one cached client, got %d", len(runner.clients))
+	if len(runner.clients.clients) != 1 {
+		t.Fatalf("expected one cached client, got %d", len(runner.clients.clients))
 	}
 }
 
@@ -203,8 +203,8 @@ func TestHeartbeatRunnerSeparatesControlClientsByTLSSettings(t *testing.T) {
 	if first == second {
 		t.Fatal("expected distinct clients for distinct TLS settings")
 	}
-	if len(runner.clients) != 2 {
-		t.Fatalf("expected two cached clients, got %d", len(runner.clients))
+	if len(runner.clients.clients) != 2 {
+		t.Fatalf("expected two cached clients, got %d", len(runner.clients.clients))
 	}
 }
 
@@ -220,10 +220,10 @@ func TestHeartbeatRunnerPrunesStaleControlClients(t *testing.T) {
 	runner.heartbeatControlClient(stale)
 	runner.pruneHeartbeatControlClients([]clientEndpointRecord{active})
 
-	if len(runner.clients) != 1 {
-		t.Fatalf("expected one cached client after prune, got %d", len(runner.clients))
+	if len(runner.clients.clients) != 1 {
+		t.Fatalf("expected one cached client after prune, got %d", len(runner.clients.clients))
 	}
-	if runner.clients[heartbeatControlClientKey(active, runner.socks, runner.timeout)] == nil {
+	if runner.clients.clients[controlHTTPClientKey(active, runner.socks, runner.timeout)] == nil {
 		t.Fatal("expected active client to remain cached")
 	}
 }

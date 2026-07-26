@@ -43,7 +43,7 @@ func (r subscriptionSyncRunner) acknowledge(ctx context.Context, endpoint client
 	if ack == nil {
 		ack = acknowledgeRotation
 	}
-	return ack(ctx, endpoint, port, credential, r.timeout)
+	return ack(ctx, r.clients.client(endpoint), endpoint, port, credential)
 }
 
 func (r subscriptionSyncRunner) verifyRotationTunnel(parent context.Context, endpoint clientEndpointRecord, index int, credential string) error {

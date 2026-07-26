@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"net/http"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -17,6 +15,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 	subscriptiondomain "github.com/NlightN22/xray-p2p/go/internal/subscription"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
@@ -29,8 +28,9 @@ type subscriptionSyncRunner struct {
 	interval  time.Duration
 	timeout   time.Duration
 	socks     string
+	clients   *controlHTTPPool
 	commit    func(context.Context, clientInstallState, func(context.Context) error) (xraylive.RuntimeApplyResult, error)
-	ack       func(context.Context, clientEndpointRecord, int, string, time.Duration) error
+	ack       func(context.Context, ownedhttp.Doer, clientEndpointRecord, int, string) error
 	probe     func(context.Context, clientEndpointRecord, int, string) error
 }
 
@@ -49,6 +49,7 @@ func startSubscriptionSyncLoop(ctx context.Context, installDir, configDir string
 	return func() {
 		cancel()
 		wg.Wait()
+		runner.shutdown()
 	}
 }
 
@@ -57,6 +58,7 @@ func runSubscriptionSyncOnce(ctx context.Context, installDir, configDir string, 
 	if !ok {
 		return
 	}
+	defer runner.shutdown()
 	runner.runOnce(ctx)
 }
 
@@ -80,7 +82,19 @@ func newSubscriptionSyncRunner(installDir, configDir string, opts HeartbeatOptio
 	if runner.timeout <= 0 {
 		runner.timeout = 2 * time.Second
 	}
+	runner.clients = newControlHTTPPool(runner.timeout, "")
 	return runner, true
+}
+
+func (r subscriptionSyncRunner) shutdown() {
+	if r.clients == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
+	if err := r.clients.shutdown(ctx); err != nil {
+		logging.Debug("subscription HTTP client shutdown failed", "err", err)
+	}
 }
 
 func (r subscriptionSyncRunner) loop(ctx context.Context) {
@@ -103,6 +117,11 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 		return
 	}
 	state := runtimeDesiredToClientInstallState(meta.Desired)
+	pruneCtx, pruneCancel := context.WithTimeout(ctx, r.timeout)
+	if err := r.clients.prune(pruneCtx, state.Endpoints); err != nil {
+		logging.Debug("stale subscription client shutdown failed", "err", err)
+	}
+	pruneCancel()
 	auth := controlAuthMap(meta.Control.AuthUsers)
 	for index, endpoint := range state.Endpoints {
 		secret := auth[strings.TrimSpace(endpoint.User)]
@@ -112,14 +131,15 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 		credential := secret
 		rotationPending := false
 		controlPort := remoteControlPort()
-		rotation, rotationErr := fetchRotation(ctx, endpoint, controlPort, secret, r.timeout)
+		client := r.clients.client(endpoint)
+		rotation, rotationErr := fetchRotation(ctx, client, endpoint, controlPort, secret)
 		if rotationErr != nil {
 			logging.Debug("credential rotation check failed", "tag", endpoint.Tag, "err", rotationErr)
 		} else if rotation.RotationPending {
 			credential = rotation.ActiveCredential
 			rotationPending = true
 		}
-		sub, err := fetchSubscriptionConditional(ctx, endpoint, controlPort, credential, r.timeout, meta.Control.Subscription.Generation)
+		sub, err := fetchSubscriptionConditional(ctx, client, endpoint, controlPort, credential, meta.Control.Subscription.Generation)
 		if err != nil {
 			logging.Debug("subscription fetch failed", "tag", endpoint.Tag, "err", err)
 			continue
@@ -218,51 +238,4 @@ func subscriptionAddress(endpoint clientEndpointRecord, host string) string {
 		return strings.TrimSpace(endpoint.Address)
 	}
 	return strings.TrimSpace(host)
-}
-
-func fetchSubscription(ctx context.Context, endpoint clientEndpointRecord, port int, secret string, timeout time.Duration) (controlplane.Subscription, error) {
-	return fetchSubscriptionConditional(ctx, endpoint, port, secret, timeout, "")
-}
-
-func fetchSubscriptionConditional(ctx context.Context, endpoint clientEndpointRecord, port int, secret string, timeout time.Duration, knownGeneration string) (controlplane.Subscription, error) {
-	if port <= 0 {
-		port = 62022
-	}
-	host := strings.TrimSpace(endpoint.Hostname)
-	if host == "" {
-		return controlplane.Subscription{}, fmt.Errorf("endpoint host is required")
-	}
-	url := "https://" + net.JoinHostPort(host, fmt.Sprintf("%d", port)) + controlplane.PathSubscription
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return controlplane.Subscription{}, err
-	}
-	if secret != "" {
-		nonce, err := controlNonce()
-		if err != nil {
-			return controlplane.Subscription{}, err
-		}
-		if err := controlplane.ApplyHeaders(req, endpoint.User, secret, nonce, nil, time.Now().UTC()); err != nil {
-			return controlplane.Subscription{}, err
-		}
-	}
-	if strings.TrimSpace(knownGeneration) != "" {
-		req.Header.Set(controlplane.HeaderKnownGeneration, strings.TrimSpace(knownGeneration))
-	}
-	resp, err := controlHTTPClient(endpoint, timeout).Do(req)
-	if err != nil {
-		return controlplane.Subscription{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNoContent {
-		return controlplane.Subscription{}, nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return controlplane.Subscription{}, fmt.Errorf("subscription request failed: %s", resp.Status)
-	}
-	var sub controlplane.Subscription
-	if err := json.NewDecoder(resp.Body).Decode(&sub); err != nil {
-		return controlplane.Subscription{}, err
-	}
-	return sub, nil
 }

@@ -1,0 +1,109 @@
+package nethttp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestOwnedClientReusesConnectionAndClosesIt(t *testing.T) {
+	var opened atomic.Int64
+	var closed atomic.Int64
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			opened.Add(1)
+		case http.StateClosed:
+			closed.Add(1)
+		}
+	}
+	server.Start()
+	defer server.Close()
+
+	client := NewClient(ClientOptions{Timeout: time.Second})
+	for range 25 {
+		response, err := client.Do(newRequest(t, server.URL))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.Copy(io.Discard, response.Body); err != nil {
+			t.Fatal(err)
+		}
+		if err := response.Body.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := opened.Load(); got != 1 {
+		t.Fatalf("opened connections = %d, want 1", got)
+	}
+	shutdownCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := client.Shutdown(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, time.Second, func() bool { return closed.Load() == opened.Load() })
+	if _, err := client.Do(newRequest(t, server.URL)); !errors.Is(err, ErrClientClosed) {
+		t.Fatalf("request after shutdown error = %v, want %v", err, ErrClientClosed)
+	}
+}
+
+func TestOwnedClientShutdownCancelsActiveRequest(t *testing.T) {
+	started := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		close(started)
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
+	client := NewClient(ClientOptions{Timeout: 10 * time.Second})
+	requestDone := make(chan error, 1)
+	go func() {
+		_, err := client.Do(newRequest(t, server.URL))
+		requestDone <- err
+	}()
+	<-started
+
+	shutdownCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := client.Shutdown(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-requestDone:
+		if err == nil {
+			t.Fatal("active request was not canceled")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("active request did not finish")
+	}
+}
+
+func newRequest(t *testing.T, url string) *http.Request {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
+}
+
+func eventually(t *testing.T, timeout time.Duration, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("condition was not satisfied")
+}

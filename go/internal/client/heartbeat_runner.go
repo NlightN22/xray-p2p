@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -29,7 +28,7 @@ type heartbeatRunner struct {
 	port      int
 	socks     string
 	backoff   map[string]heartbeatBackoff
-	clients   map[string]*http.Client
+	clients   *controlHTTPPool
 }
 
 func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
@@ -48,13 +47,17 @@ func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer runner.closeIdleHeartbeatClients()
 		runner.loop(hbCtx)
 	}()
 
 	return func() {
 		cancel()
 		wg.Wait()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), runner.timeout)
+		defer shutdownCancel()
+		if err := runner.clients.shutdown(shutdownCtx); err != nil {
+			logging.Debug("heartbeat HTTP client shutdown failed", "err", err)
+		}
 	}
 }
 
@@ -110,7 +113,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		port:      port,
 		socks:     socks,
 		backoff:   map[string]heartbeatBackoff{},
-		clients:   map[string]*http.Client{},
+		clients:   newControlHTTPPool(timeout, socks),
 	}, nil
 }
 

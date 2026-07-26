@@ -19,11 +19,12 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 
 	"golang.org/x/net/proxy"
 )
 
-func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, socksAddress string, client *http.Client) error {
+func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, socksAddress string, client ownedhttp.Doer) error {
 	if strings.TrimSpace(socksAddress) == "" {
 		return errors.New("SOCKS tunnel is required for client heartbeat")
 	}
@@ -59,7 +60,7 @@ func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEn
 	return nil
 }
 
-func discoverHeartbeatCapability(ctx context.Context, host string, port int, client *http.Client) (heartbeat.Capability, error) {
+func discoverHeartbeatCapability(ctx context.Context, host string, port int, client ownedhttp.Doer) (heartbeat.Capability, error) {
 	if client == nil {
 		return heartbeat.CapabilityUnknown, errors.New("control HTTP client is required")
 	}
@@ -90,16 +91,11 @@ func discoverHeartbeatCapability(ctx context.Context, host string, port int, cli
 	return heartbeat.CapabilityXP2PHeartbeat, nil
 }
 
-func controlHTTPClientThroughSocks(endpoint clientEndpointRecord, timeout time.Duration, socksAddress string) *http.Client {
-	client := controlHTTPClient(endpoint, timeout)
-	transport, _ := client.Transport.(*http.Transport)
-	if transport == nil {
-		return client
-	}
-	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return dialControlViaSocks(ctx, addr, strings.TrimSpace(socksAddress), timeout)
-	}
-	return client
+func controlHTTPClientThroughSocks(endpoint clientEndpointRecord, timeout time.Duration, socksAddress string) ownedhttp.OwnedClient {
+	return newControlHTTPClient(endpoint, timeout, socksDialer{
+		address: strings.TrimSpace(socksAddress),
+		timeout: timeout,
+	})
 }
 
 func dialControlViaSocks(ctx context.Context, addr, socksAddress string, timeout time.Duration) (net.Conn, error) {
@@ -133,17 +129,39 @@ func controlAuthMap(users []controlplane.AuthUser) map[string]string {
 	return out
 }
 
-func controlHTTPClient(endpoint clientEndpointRecord, timeout time.Duration) *http.Client {
+func controlHTTPClient(endpoint clientEndpointRecord, timeout time.Duration) ownedhttp.OwnedClient {
+	return newControlHTTPClient(endpoint, timeout, nil)
+}
+
+func newControlHTTPClient(endpoint clientEndpointRecord, timeout time.Duration, dialer ownedhttp.OwnedDialer) ownedhttp.OwnedClient {
 	if timeout <= 0 {
 		timeout = 3 * time.Second
 	}
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: controlTLSConfig(endpoint),
-			DialContext:     (&net.Dialer{Timeout: timeout}).DialContext,
-		},
-	}
+	return ownedhttp.NewClient(ownedhttp.ClientOptions{
+		Timeout:               timeout,
+		DialTimeout:           timeout,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
+		IdleConnTimeout:       30 * time.Second,
+		MaxIdleConns:          32,
+		MaxIdleConnsPerHost:   4,
+		ForceHTTP2:            true,
+		TLSConfig:             controlTLSConfig(endpoint),
+		Dialer:                dialer,
+	})
+}
+
+type socksDialer struct {
+	address string
+	timeout time.Duration
+}
+
+func (d socksDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return dialControlViaSocks(ctx, address, d.address, d.timeout)
+}
+
+func (socksDialer) Shutdown(context.Context) error {
+	return nil
 }
 
 func controlTLSConfig(endpoint clientEndpointRecord) *tls.Config {

@@ -6,11 +6,11 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -28,7 +28,7 @@ type Options struct {
 	Continuous           bool
 	Reporter             Reporter
 	Silent               bool
-	HTTPClient           *http.Client
+	HTTPClient           ownedhttp.Doer
 }
 
 // Reporter is invoked when an HTTPS ping succeeds.

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
@@ -66,7 +66,7 @@ func TestRotationProbeFailurePreventsPersistenceAndAck(t *testing.T) {
 	acknowledged := false
 	runner := subscriptionSyncRunner{
 		probe: func(context.Context, clientEndpointRecord, int, string) error { return probeErr },
-		ack: func(context.Context, clientEndpointRecord, int, string, time.Duration) error {
+		ack: func(context.Context, ownedhttp.Doer, clientEndpointRecord, int, string) error {
 			acknowledged = true
 			return nil
 		},
@@ -103,7 +103,7 @@ func TestRotationPersistenceFailurePreventsAck(t *testing.T) {
 			live = "previous-live"
 			return xraylive.RuntimeApplyFailed, persistErr
 		},
-		ack: func(context.Context, clientEndpointRecord, int, string, time.Duration) error {
+		ack: func(context.Context, ownedhttp.Doer, clientEndpointRecord, int, string) error {
 			acknowledged = true
 			return nil
 		},
