@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeprobe"
 	subscriptiondomain "github.com/NlightN22/xray-p2p/go/internal/subscription"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
@@ -23,15 +25,16 @@ import (
 const defaultSubscriptionSyncInterval = 30 * time.Second
 
 type subscriptionSyncRunner struct {
-	configDir string
-	statePath string
-	interval  time.Duration
-	timeout   time.Duration
-	socks     string
-	clients   *controlHTTPPool
-	commit    func(context.Context, clientInstallState, func(context.Context) error) (xraylive.RuntimeApplyResult, error)
-	ack       func(context.Context, ownedhttp.Doer, clientEndpointRecord, int, string) error
-	probe     func(context.Context, clientEndpointRecord, int, string) error
+	configDir         string
+	statePath         string
+	interval          time.Duration
+	timeout           time.Duration
+	socks             string
+	clients           *controlHTTPPool
+	commit            func(context.Context, clientInstallState, func(context.Context) error) (xraylive.RuntimeApplyResult, error)
+	ack               func(context.Context, ownedhttp.Doer, clientEndpointRecord, int, string) error
+	probe             func(context.Context, clientEndpointRecord, int, string) error
+	unregisterMetrics func()
 }
 
 func startSubscriptionSyncLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
@@ -73,7 +76,7 @@ func newSubscriptionSyncRunner(installDir, configDir string, opts HeartbeatOptio
 	runner := subscriptionSyncRunner{
 		configDir: configDir,
 		statePath: filepath.Join(stateRoot, layout.ClientHeartbeatStateFileName),
-		interval:  defaultSubscriptionSyncInterval,
+		interval:  testSubscriptionSyncInterval(defaultSubscriptionSyncInterval),
 		timeout:   opts.Timeout,
 		socks:     strings.TrimSpace(opts.SocksAddress),
 		commit:    commitClientSubscriptionStateVerified,
@@ -83,10 +86,27 @@ func newSubscriptionSyncRunner(installDir, configDir string, opts HeartbeatOptio
 		runner.timeout = 2 * time.Second
 	}
 	runner.clients = newControlHTTPPool(runner.timeout, "")
+	runner.unregisterMetrics = runtimeprobe.Register("control-http-clients", func() map[string]int64 {
+		return map[string]int64{"control_http_clients": runner.clients.size()}
+	})
 	return runner, true
 }
 
+func testSubscriptionSyncInterval(fallback time.Duration) time.Duration {
+	if os.Getenv("XP2P_TEST_MODE") != "1" {
+		return fallback
+	}
+	value := strings.TrimSpace(os.Getenv("XP2P_TEST_SUBSCRIPTION_INTERVAL"))
+	if interval, err := time.ParseDuration(value); err == nil && interval > 0 {
+		return interval
+	}
+	return fallback
+}
+
 func (r subscriptionSyncRunner) shutdown() {
+	if r.unregisterMetrics != nil {
+		defer r.unregisterMetrics()
+	}
 	if r.clients == nil {
 		return
 	}

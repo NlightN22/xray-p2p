@@ -39,6 +39,11 @@ GO_LIMITS = {
     "go_heap_alloc": plateau.PlateauLimit(32 * 1024 * 1024, 256 * 1024),
     "go_heap_sys": plateau.PlateauLimit(32 * 1024 * 1024, 256 * 1024),
     "go_goroutines": plateau.PlateauLimit(16, 0.1),
+    "control_http_clients": plateau.PlateauLimit(4, 0.1),
+    "control_connections_active": plateau.PlateauLimit(8, 0.1),
+    "control_connections_idle": plateau.PlateauLimit(8, 0.1),
+    "control_connections_current": plateau.PlateauLimit(8, 0.1),
+    "control_connections_peak": plateau.PlateauLimit(8, 0.1),
 }
 
 

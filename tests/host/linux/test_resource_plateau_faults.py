@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from tests.host.linux import _resource_plateau as plateau
@@ -31,20 +33,37 @@ def test_process_sampling_fails_closed_when_pid_disappears(client_host):
         plateau.process_sample(client_host, 999999, fixture.SERVER_IP)
 
 
-def test_integration_gate_rejects_real_fd_leak(client_host):
-    pid = scenarios.start_fd_leak(client_host)
+def test_integration_gate_rejects_xp2p_control_transport_leak(tunnel_environment):
+    env = tunnel_environment
+    scenarios.set_control_status(env, 503)
     try:
-        samples = [
-            plateau.process_sample(client_host, pid, fixture.SERVER_IP)
-            for _ in range(5)
-        ]
-        with pytest.raises(AssertionError, match="did not plateau"):
-            plateau.assess(
-                [sample["fd"] for sample in samples],
-                plateau.PlateauLimit(maximum_range=4, maximum_slope=0.5),
-            )
+        with fixture.active_tunnel_sessions(
+            env,
+            runtime_metrics=True,
+            server_process_env={
+                "XP2P_TEST_MODE": "1",
+                "XP2P_TEST_CONTROL_STATUS_FILE": scenarios.CONTROL_STATUS_FILE,
+            },
+            client_process_env={
+                "XP2P_TEST_MODE": "1",
+                "XP2P_TEST_SUBSCRIPTION_INTERVAL": "100ms",
+                "XP2P_TEST_CONTROL_TRANSPORT_LEAK": "1",
+            },
+        ) as sessions:
+            samples = []
+            for _ in range(8):
+                samples.append(plateau.process_sample(
+                    env["client_host"], sessions["client"]["pid"], fixture.SERVER_IP,
+                    sessions["client"]["runtime_metrics"],
+                ))
+                time.sleep(1)
+            with pytest.raises(AssertionError, match="did not plateau"):
+                plateau.assess(
+                    [sample["control_http_clients"] for sample in samples],
+                    plateau.PlateauLimit(maximum_range=4, maximum_slope=0.5),
+                )
     finally:
-        client_host.run(f"kill {pid} >/dev/null 2>&1 || true")
+        scenarios.set_control_status(env, None)
 
 
 def test_client_restart_and_server_shutdown_release_previous_owners(tunnel_environment):

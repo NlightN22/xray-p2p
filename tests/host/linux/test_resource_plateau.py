@@ -57,6 +57,7 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
             "--force",
             check=True,
         )
+        scenarios.set_control_status(env, None)
         with ExitStack() as stack:
             stack.enter_context(
                 fixture.ip_alias(env["server_host"], f"{gate.SECOND_ENDPOINT_IP}/32")
@@ -67,6 +68,14 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                     env,
                     runtime_metrics=True,
                     test_heartbeat_interval="" if nightly else "250ms",
+                    server_process_env={
+                        "XP2P_TEST_MODE": "1",
+                        "XP2P_TEST_CONTROL_STATUS_FILE": scenarios.CONTROL_STATUS_FILE,
+                    },
+                    client_process_env={
+                        "XP2P_TEST_MODE": "1",
+                        "XP2P_TEST_SUBSCRIPTION_INTERVAL": "250ms",
+                    } if not nightly else None,
                 )
             )
             aux_session = stack.enter_context(
@@ -128,14 +137,14 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
             gate.collect_phase(payload, "stable_rotation_absent", owners, phase_count, sample_interval)
             env["server_runner"]("server", "user", "rotate", env["client_user"], check=True)
             gate.collect_phase(payload, "rotation_pending", owners, phase_count, sample_interval)
+            scenarios.set_control_status(env, 503)
+            non_200_count = [0]
+            time.sleep(1)
             gate.collect_phase(
-                payload,
-                "non_200",
-                owners,
-                phase_count,
-                sample_interval,
-                before_sample=lambda index: scenarios.assert_non_200(env, index),
+                payload, "non_200", owners, phase_count, sample_interval,
+                before_sample=lambda _index: scenarios.assert_xp2p_non_200(env, non_200_count),
             )
+            scenarios.set_control_status(env, None)
             with netem.netem_degradation(
                 env["client_host"],
                 fixture.SERVER_IP,

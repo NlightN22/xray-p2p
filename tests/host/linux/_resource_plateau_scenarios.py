@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shlex
 import time
 
 import pytest
@@ -47,15 +46,26 @@ def add_second_endpoint(env: dict) -> None:
     assert {fixture.SERVER_IP, gate.SECOND_ENDPOINT_IP} <= hosts
 
 
-def assert_non_200(env: dict, _index: int) -> None:
-    url = f"https://{fixture.SERVER_IP}:{fixture.SERVER_DIAGNOSTICS_PORT}/subscription"
-    result = env["client_host"].run(
-        "curl --silent --show-error --insecure --output /dev/null "
-        f"--write-out '%{{http_code}}' {shlex.quote(url)}"
+CONTROL_STATUS_FILE = "/tmp/xp2p-test-control-status"
+
+
+def set_control_status(env: dict, status: int | None) -> None:
+    if status is None:
+        env["server_host"].run(f"sudo -n rm -f {CONTROL_STATUS_FILE} {CONTROL_STATUS_FILE}.count")
+        return
+    result = env["server_host"].run(
+        f"printf '%s' {int(status)} | sudo -n tee {CONTROL_STATUS_FILE} >/dev/null"
     )
-    status = (result.stdout or "").strip()
-    if result.rc != 0 or not status.startswith(("4", "5")):
-        pytest.fail(f"expected non-200 control response, got rc={result.rc}, status={status}")
+    if result.rc != 0:
+        pytest.fail(f"failed to enable control status fault: {result.stderr}")
+
+
+def assert_xp2p_non_200(env: dict, previous: list[int]) -> None:
+    result = env["server_host"].run(f"sudo -n cat {CONTROL_STATUS_FILE}.count")
+    count = int((result.stdout or "0").strip() or "0") if result.rc == 0 else 0
+    if count <= previous[0]:
+        pytest.fail(f"XP2P client did not receive another non-200 response: count={count}")
+    previous[0] = count
 
 
 def heartbeat_attempts(host) -> dict[str, int]:
@@ -86,18 +96,3 @@ def wait_for_recovery(env: dict, aux_host, baselines: dict) -> None:
             return
         time.sleep(0.5)
     pytest.fail(f"fresh healthy heartbeats did not recover before plateau measurement: {details}")
-
-
-def start_fd_leak(host) -> int:
-    command = r"""nohup python3 -c '
-import os
-import time
-files = []
-while True:
-    files.append(open("/dev/null"))
-    time.sleep(0.05)
-' >/tmp/xp2p-resource-leak.log 2>&1 & echo $!"""
-    result = host.run(command)
-    if result.rc != 0 or not (result.stdout or "").strip():
-        pytest.fail(f"failed to start resource leak fixture: {result.stderr}")
-    return int(result.stdout.strip())

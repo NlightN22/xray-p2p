@@ -20,20 +20,21 @@ def xp2p_run_session(
     *,
     runtime_metrics_file: str = "",
     test_heartbeat_interval: str = "",
+    process_env: dict[str, str] | None = None,
 ):
     install_arg = _posix(install_dir)
     args = ("scripts/linux/start_xp2p_run.sh", role, install_arg, config_dir)
-    if runtime_metrics_file or test_heartbeat_interval:
-        process_env = {}
+    if runtime_metrics_file or test_heartbeat_interval or process_env:
+        environment = dict(process_env or {})
         if runtime_metrics_file:
-            process_env.update(
+            environment.update(
                 {
                     "XP2P_RUNTIME_METRICS_FILE": runtime_metrics_file,
                     "XP2P_RUNTIME_METRICS_INTERVAL": "1s",
                 }
             )
         if test_heartbeat_interval:
-            process_env.update(
+            environment.update(
                 {
                     "XP2P_TEST_MODE": "1",
                     "XP2P_TEST_HEARTBEAT_INTERVAL": test_heartbeat_interval,
@@ -42,7 +43,7 @@ def xp2p_run_session(
         result = run_guest_script_with_env(
             host,
             args[0],
-            process_env,
+            environment,
             *args[1:],
         )
     else:

@@ -19,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	xnethttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeprobe"
 )
 
 const (
@@ -83,7 +84,7 @@ func StartBackground(ctx context.Context, opts Options) (*BackgroundServer, erro
 	if err != nil {
 		return nil, fmt.Errorf("start HTTPS control listener %s: %w", listenAddr, err)
 	}
-	srv := xnethttp.NewServer(controlplane.NewHandler(controlplane.HandlerOptions{
+	handler := testControlFaultHandler(controlplane.NewHandler(controlplane.HandlerOptions{
 		LoadRuntime: func() (controlplane.Runtime, error) {
 			return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
 		},
@@ -102,8 +103,22 @@ func StartBackground(ctx context.Context, opts Options) (*BackgroundServer, erro
 		ReportError: func(operation string, err error) {
 			logging.Error("control operation failed", "operation", operation, "err", err)
 		},
-	}), xnethttp.ServerOptions{})
-	return startOwnedHTTPServer(ctx, ln, srv, certPath, keyPath, "HTTPS control server", opts.ResourceLogInterval), nil
+	}))
+	srv := xnethttp.NewServer(handler, xnethttp.ServerOptions{})
+	owner := startOwnedHTTPServer(ctx, ln, srv, certPath, keyPath, "HTTPS control server", opts.ResourceLogInterval)
+	unregister := runtimeprobe.Register("control-server", func() map[string]int64 {
+		metrics := srv.Metrics()
+		return map[string]int64{
+			"control_connections_new": metrics.New, "control_connections_active": metrics.Active,
+			"control_connections_idle": metrics.Idle, "control_connections_closed": metrics.Closed,
+			"control_connections_current": metrics.Current, "control_connections_peak": metrics.Peak,
+		}
+	})
+	go func() {
+		<-owner.done
+		unregister()
+	}()
+	return owner, nil
 }
 
 // StartStandaloneDiagnostics launches only the public readiness and ping endpoints.

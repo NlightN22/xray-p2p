@@ -383,6 +383,8 @@ def active_tunnel_sessions(
     *,
     runtime_metrics: bool = False,
     test_heartbeat_interval: str = "",
+    server_process_env: dict[str, str] | None = None,
+    client_process_env: dict[str, str] | None = None,
 ):
     server_metrics = "/tmp/xp2p-server-runtime.metrics" if runtime_metrics else ""
     client_metrics = "/tmp/xp2p-client-runtime.metrics" if runtime_metrics else ""
@@ -392,6 +394,7 @@ def active_tunnel_sessions(
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
         runtime_metrics_file=server_metrics,
+        process_env=server_process_env,
     ) as server_session, linux_env.xp2p_run_session(
         env["client_host"],
         "client",
@@ -399,6 +402,7 @@ def active_tunnel_sessions(
         helpers.CLIENT_CONFIG_DIR_NAME,
         runtime_metrics_file=client_metrics,
         test_heartbeat_interval=test_heartbeat_interval,
+        process_env=client_process_env,
     ) as client_session:
         time.sleep(2.0)
         wait_for_apply_request_clear(env["server_host"])

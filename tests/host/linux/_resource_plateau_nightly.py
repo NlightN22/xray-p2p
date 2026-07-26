@@ -7,6 +7,7 @@ import time
 import pytest
 
 from tests.host.linux import _helpers as helpers
+from tests.host.linux import _resource_plateau as plateau
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 
 BRIDGE = "xp2p-plateau"
@@ -26,6 +27,7 @@ def extra_client_sessions(env: dict, host):
     finally:
         for session in reversed(sessions):
             host.run(f"sudo -n kill {session['pid']} >/dev/null 2>&1 || true")
+        _wait_for_shutdown(env, host, sessions)
         _remove_network(env, host)
 
 
@@ -107,7 +109,27 @@ def _start_client(env: dict, host, index: int) -> dict:
         "xray_pid": int(xray.stdout.strip()),
         "runtime_metrics": metrics,
         "peer": fixture.SERVER_IP,
+        "source_ip": f"10.63.0.{10 + index}",
     }
+
+
+def _wait_for_shutdown(env: dict, host, sessions: list[dict]) -> None:
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        alive = [
+            pid for session in sessions for pid in (session["pid"], session["xray_pid"])
+            if host.run(f"sudo -n test -e /proc/{pid}").rc == 0
+        ]
+        connections = {
+            session["source_ip"]: plateau.host_peer_tcp(env["server_host"], session["source_ip"])
+            for session in sessions
+        }
+        if not alive and not any(connections.values()):
+            return
+        time.sleep(0.5)
+    pytest.fail(
+        f"nightly owners did not release resources: alive={alive}, connections={connections}"
+    )
 
 
 def _remove_network(env: dict, host) -> None:

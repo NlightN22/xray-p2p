@@ -90,7 +90,7 @@ if [ -n "$metrics" ]; then
   now=$(date +%s%N)
   test -n "$sampled" && test $((now-sampled)) -lt 5000000000 ||
     { echo "runtime metrics are stale" >&2; exit 25; }
-  awk -F= '$1 ~ /^(go_heap_alloc|go_heap_sys|go_goroutines|sample_unix_nano)$/ {print $1 "=" $2}' "$metrics"
+  awk -F= '$1 ~ /^(go_heap_alloc|go_heap_sys|go_goroutines|sample_unix_nano|control_connections_.*|control_http_clients)$/ {print $1 "=" $2}' "$metrics"
 fi
 """
     command = (
