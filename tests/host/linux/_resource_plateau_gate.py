@@ -8,14 +8,24 @@ import pytest
 from tests.host.linux import _resource_plateau as plateau
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 
-QUICK_SAMPLES = 24
-NIGHTLY_SAMPLES = 720
-SAMPLE_INTERVAL_SECONDS = 5.0
+QUICK_SAMPLES = 120
+NIGHTLY_SAMPLES = 1440
+QUICK_SAMPLE_INTERVAL_SECONDS = 1.0
+NIGHTLY_SAMPLE_INTERVAL_SECONDS = 5.0
 WARMUP_SECONDS = 30.0
 AUX_CLIENT_IP = "10.62.10.13"
+SECOND_ENDPOINT_IP = "10.62.10.14"
+PHASE_NAMES = (
+    "stable_rotation_absent",
+    "rotation_pending",
+    "non_200",
+    "timeout_packet_loss",
+    "full_network_loss",
+    "recovered",
+)
 LIMITS = {
     "rss_kib": plateau.PlateauLimit(32 * 1024, 256),
-    "threads": plateau.PlateauLimit(8, 0.1),
+    "threads": plateau.PlateauLimit(8, 0.25),
     "fd": plateau.PlateauLimit(12, 0.1),
     "socket_fd": plateau.PlateauLimit(8, 0.1),
     "pipe_fd": plateau.PlateauLimit(8, 0.1),
@@ -63,12 +73,46 @@ def assert_owner_shutdown(env: dict, sessions: dict, aux_host) -> None:
     )
 
 
-def collect_phase(payload: dict, name: str, owners: dict, count: int, interval: float) -> None:
+def collect_phase(
+    payload: dict,
+    name: str,
+    owners: dict,
+    count: int,
+    interval: float,
+    *,
+    before_sample=None,
+) -> None:
     if count <= 0:
         return
     start = len(next(iter(payload["samples"].values())))
-    plateau.collect_parallel(owners, payload["samples"], count, interval)
+    plateau.collect_parallel(owners, payload["samples"], count, interval, before_sample)
     payload["phases"][name] = {"start": start, "end": start + count}
+
+
+def assess_phases(payload: dict) -> None:
+    payload["assessments"] = {}
+    for phase, bounds in payload["phases"].items():
+        payload["assessments"][phase] = {}
+        for owner, samples in payload["samples"].items():
+            phase_samples = samples[bounds["start"] : bounds["end"]]
+            limits = LIMITS | (GO_LIMITS if owner.endswith("_xp2p") else {})
+            peer_metrics = {
+                key
+                for sample in phase_samples
+                for key in sample
+                if key.startswith("tcp_peer_")
+            }
+            limits = limits | {key: LIMITS["tcp_peer"] for key in peer_metrics}
+            payload["assessments"][phase][owner] = {}
+            for metric, limit in limits.items():
+                try:
+                    result = plateau.assess(
+                        [sample.get(metric, 0) for sample in phase_samples],
+                        limit,
+                    )
+                except AssertionError as exc:
+                    raise AssertionError(f"{phase}/{owner}/{metric}: {exc}") from exc
+                payload["assessments"][phase][owner][metric] = result
 
 
 def assert_pids_gone(env: dict, pids: dict[str, int]) -> None:

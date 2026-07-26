@@ -119,8 +119,11 @@ def collect_parallel(
     samples: dict[str, list[dict[str, int]]],
     count: int,
     interval: float,
+    before_sample=None,
 ) -> None:
     for index in range(count):
+        if before_sample is not None:
+            before_sample(index)
         with ThreadPoolExecutor(max_workers=len(owners)) as executor:
             futures = {
                 name: executor.submit(process_sample, host, pid, peer_ip, metrics_file)

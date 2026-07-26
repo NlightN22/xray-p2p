@@ -23,6 +23,11 @@ var requiredClientArtifacts = []string{layout.XrayConfigFileName, layout.Runtime
 func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client run", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
+	heartbeatInterval, err := testHeartbeatInterval(2 * time.Second)
+	if err != nil {
+		logging.Error("xp2p client run: invalid test heartbeat interval", "err", err)
+		return 2
+	}
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
@@ -30,7 +35,7 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	autoInstall := fs.Bool("auto-install", false, "install automatically if missing")
 	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 	hbEnabled := fs.Bool("heartbeat", true, "enable background heartbeat probes")
-	hbInterval := fs.Duration("heartbeat-interval", 2*time.Second, "frequency of heartbeat probes")
+	hbInterval := fs.Duration("heartbeat-interval", heartbeatInterval, "frequency of heartbeat probes")
 	hbTimeout := fs.Duration("heartbeat-timeout", 2*time.Second, "timeout per heartbeat probe")
 	hbPort := fs.String("heartbeat-port", cfg.Server.Port, "diagnostics service port to probe")
 	hbSocks := fs.String("heartbeat-socks", cfg.Client.SocksAddress, "SOCKS5 proxy for heartbeat (optional)")
@@ -126,6 +131,21 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	}
 
 	return 0
+}
+
+func testHeartbeatInterval(fallback time.Duration) (time.Duration, error) {
+	if os.Getenv("XP2P_TEST_MODE") != "1" {
+		return fallback, nil
+	}
+	value := strings.TrimSpace(os.Getenv("XP2P_TEST_HEARTBEAT_INTERVAL"))
+	if value == "" {
+		return fallback, nil
+	}
+	interval, err := time.ParseDuration(value)
+	if err != nil || interval <= 0 {
+		return 0, fmt.Errorf("XP2P_TEST_HEARTBEAT_INTERVAL must be a positive duration")
+	}
+	return interval, nil
 }
 
 func performClientInstall(ctx context.Context, cfg config.Config, installDir, configDirName string) error {

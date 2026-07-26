@@ -33,13 +33,34 @@ on:
         default: ""
 
 jobs:
+  resolve-release-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag SHA
+        id: ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          sha="$(git rev-parse "refs/tags/${{ inputs.tag }}^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   resource-plateau:
+    needs: resolve-release-ref
     uses: ./.github/workflows/resource-plateau.yml
     with:
       profile: nightly
+      ref: ${{ needs.resolve-release-ref.outputs.sha }}
 
   aggregate:
-    needs: resource-plateau
+    needs: [resolve-release-ref, resource-plateau]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -48,6 +69,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.resolve-release-ref.outputs.sha }}
           fetch-depth: 0
 
       - name: Checkout OpenWrt .ipk staging branch (optional)
@@ -77,6 +99,10 @@ jobs:
             exit 1
           fi
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
+          test "$sha" = "${{ needs.resolve-release-ref.outputs.sha }}" || {
+            echo "Release tag moved after resource gate resolution" >&2
+            exit 1
+          }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
           prev=""

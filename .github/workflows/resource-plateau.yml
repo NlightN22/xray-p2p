@@ -6,6 +6,10 @@ on:
       profile:
         required: true
         type: string
+      ref:
+        description: Exact commit SHA to verify
+        required: true
+        type: string
   schedule:
     - cron: "17 1 * * *"
   workflow_dispatch:
@@ -32,6 +36,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_call' && inputs.ref || github.sha }}
+
+      - name: Verify checked out commit
+        if: github.event_name == 'workflow_call'
+        shell: powershell
+        run: |
+          $actual = git rev-parse HEAD
+          if ($actual -ne "${{ inputs.ref }}") {
+              throw "Checked out $actual instead of requested release commit ${{ inputs.ref }}"
+          }
 
       - name: Start Linux test topology
         shell: powershell

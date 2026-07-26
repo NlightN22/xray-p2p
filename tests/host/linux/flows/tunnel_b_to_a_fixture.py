@@ -378,7 +378,12 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
 
 
 @contextmanager
-def active_tunnel_sessions(env: dict, *, runtime_metrics: bool = False):
+def active_tunnel_sessions(
+    env: dict,
+    *,
+    runtime_metrics: bool = False,
+    test_heartbeat_interval: str = "",
+):
     server_metrics = "/tmp/xp2p-server-runtime.metrics" if runtime_metrics else ""
     client_metrics = "/tmp/xp2p-client-runtime.metrics" if runtime_metrics else ""
     with linux_env.xp2p_run_session(
@@ -393,6 +398,7 @@ def active_tunnel_sessions(env: dict, *, runtime_metrics: bool = False):
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
         runtime_metrics_file=client_metrics,
+        test_heartbeat_interval=test_heartbeat_interval,
     ) as client_session:
         time.sleep(2.0)
         wait_for_apply_request_clear(env["server_host"])

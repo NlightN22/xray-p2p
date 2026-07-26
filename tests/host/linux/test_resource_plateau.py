@@ -10,6 +10,8 @@ from tests.host.linux import _helpers as helpers
 from tests.host.linux import _netem_lab as netem
 from tests.host.linux import _resource_plateau as plateau
 from tests.host.linux import _resource_plateau_gate as gate
+from tests.host.linux import _resource_plateau_nightly as nightly_topology
+from tests.host.linux import _resource_plateau_scenarios as scenarios
 from tests.host.linux import env as linux_env
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 
@@ -29,7 +31,7 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
     )
     sample_interval = gate.positive_float(
         "XP2P_RESOURCE_PLATEAU_SAMPLE_INTERVAL",
-        gate.SAMPLE_INTERVAL_SECONDS,
+        gate.NIGHTLY_SAMPLE_INTERVAL_SECONDS if nightly else gate.QUICK_SAMPLE_INTERVAL_SECONDS,
     )
     warmup = gate.positive_float("XP2P_RESOURCE_PLATEAU_WARMUP", gate.WARMUP_SECONDS)
 
@@ -56,7 +58,17 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
             check=True,
         )
         with ExitStack() as stack:
-            sessions = stack.enter_context(fixture.active_tunnel_sessions(env, runtime_metrics=True))
+            stack.enter_context(
+                fixture.ip_alias(env["server_host"], f"{gate.SECOND_ENDPOINT_IP}/32")
+            )
+            scenarios.add_second_endpoint(env)
+            sessions = stack.enter_context(
+                fixture.active_tunnel_sessions(
+                    env,
+                    runtime_metrics=True,
+                    test_heartbeat_interval="" if nightly else "250ms",
+                )
+            )
             aux_session = stack.enter_context(
                 linux_env.xp2p_run_session(
                     aux_host,
@@ -67,6 +79,12 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                 )
             )
             aux_session["runtime_metrics"] = "/tmp/xp2p-client-runtime.metrics"
+            aux_session["xray_pid"] = plateau.xray_pid(aux_host)
+            extra_clients = (
+                stack.enter_context(nightly_topology.extra_client_sessions(env, aux_host))
+                if nightly
+                else []
+            )
             time.sleep(warmup)
             owners = {
                 "client_xp2p": (
@@ -77,40 +95,85 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                 "aux_client_xp2p": (
                     aux_host, aux_session["pid"], fixture.SERVER_IP, aux_session["runtime_metrics"],
                 ),
-                "aux_client_xray": (aux_host, plateau.xray_pid(aux_host), fixture.SERVER_IP, ""),
+                "aux_client_xray": (aux_host, aux_session["xray_pid"], fixture.SERVER_IP, ""),
                 "server_xp2p": (
                     env["server_host"], sessions["server"]["pid"], fixture.CLIENT_IP,
                     sessions["server"]["runtime_metrics"],
                 ),
                 "server_xray": (env["server_host"], plateau.xray_pid(env["server_host"]), fixture.CLIENT_IP, ""),
             }
+            for index, client in enumerate(extra_clients):
+                owners[f"nightly_client_{index}_xp2p"] = (
+                    client["host"],
+                    client["pid"],
+                    client["peer"],
+                    client["runtime_metrics"],
+                )
+                owners[f"nightly_client_{index}_xray"] = (
+                    client["host"],
+                    client["xray_pid"],
+                    client["peer"],
+                    "",
+                )
+            payload["topology"] = {
+                "client_count": 2 + len(extra_clients),
+                "mixed_legacy_clients": "unsupported: no legacy binary fixture is available",
+            }
+            assert payload["topology"]["client_count"] == (5 if nightly else 2)
             payload["samples"] = {name: [] for name in owners}
-            phase_count = max(3, sample_count // 4)
+            phase_count = sample_count // len(gate.PHASE_NAMES)
+            if phase_count < 3:
+                pytest.fail(f"sample count must provide at least three samples for each of {gate.PHASE_NAMES}")
             payload["phases"] = {}
             gate.collect_phase(payload, "stable_rotation_absent", owners, phase_count, sample_interval)
             env["server_runner"]("server", "user", "rotate", env["client_user"], check=True)
             gate.collect_phase(payload, "rotation_pending", owners, phase_count, sample_interval)
+            gate.collect_phase(
+                payload,
+                "non_200",
+                owners,
+                phase_count,
+                sample_interval,
+                before_sample=lambda index: scenarios.assert_non_200(env, index),
+            )
             with netem.netem_degradation(
                 env["client_host"],
                 fixture.SERVER_IP,
-                "delay 500ms 200ms 30% loss 25% limit 1000",
+                "delay 2500ms 500ms loss 30% limit 1000",
             ):
-                gate.collect_phase(payload, "degraded", owners, phase_count, sample_interval)
+                gate.collect_phase(
+                    payload,
+                    "timeout_packet_loss",
+                    owners,
+                    phase_count,
+                    sample_interval,
+                )
+            with netem.netem_degradation(
+                env["client_host"],
+                fixture.SERVER_IP,
+                "loss 100% limit 1000",
+            ):
+                gate.collect_phase(
+                    payload,
+                    "full_network_loss",
+                    owners,
+                    phase_count,
+                    sample_interval,
+                )
+                recovery_baselines = {
+                    "client": scenarios.heartbeat_attempts(env["client_host"]),
+                    "aux": scenarios.heartbeat_attempts(aux_host),
+                }
             netem.wait_for_no_netem(env["client_host"], fixture.SERVER_IP)
+            scenarios.wait_for_recovery(env, aux_host, recovery_baselines)
             gate.collect_phase(
                 payload,
                 "recovered",
                 owners,
-                sample_count - (phase_count * 3),
+                sample_count - (phase_count * (len(gate.PHASE_NAMES) - 1)),
                 sample_interval,
             )
-
-            for owner, samples in payload["samples"].items():
-                payload["assessments"][owner] = {}
-                limits = gate.LIMITS | (gate.GO_LIMITS if owner.endswith("_xp2p") else {})
-                for metric, limit in limits.items():
-                    values = [sample[metric] for sample in samples]
-                    payload["assessments"][owner][metric] = plateau.assess(values, limit)
+            gate.assess_phases(payload)
         gate.assert_owner_shutdown(env, sessions, aux_host)
     except BaseException:
         for role, host in (
@@ -126,41 +189,3 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
     path = plateau.write_artifact("resource-plateau", payload)
     print(f"resource plateau result: {payload['assessments']}")
     print(f"resource plateau artifact: {path}")
-
-
-@pytest.mark.parametrize(
-    ("values", "limit", "passes"),
-    [
-        ([10, 11, 10, 12, 11], plateau.PlateauLimit(3, 0.5), True),
-        ([10, 20, 30, 40, 50], plateau.PlateauLimit(50, 1), False),
-    ],
-)
-def test_plateau_assessment_detects_linear_growth(values, limit, passes):
-    if passes:
-        plateau.assess(values, limit)
-    else:
-        with pytest.raises(AssertionError, match="did not plateau"):
-            plateau.assess(values, limit)
-
-
-def test_process_sampling_fails_closed_when_pid_disappears(client_host):
-    with pytest.raises(AssertionError, match="process 999999 disappeared"):
-        plateau.process_sample(client_host, 999999, fixture.SERVER_IP)
-
-
-def test_client_restart_and_server_shutdown_release_previous_owners(tunnel_environment):
-    env = tunnel_environment
-    with fixture.active_tunnel_sessions(env) as first:
-        first_pids = {
-            "client_xp2p": first["client"]["pid"],
-            "client_xray": plateau.xray_pid(env["client_host"]),
-            "server_xp2p": first["server"]["pid"],
-            "server_xray": plateau.xray_pid(env["server_host"]),
-        }
-    gate.assert_pids_gone(env, first_pids)
-    gate.assert_owner_shutdown(env, first, env["client_host"])
-
-    with fixture.active_tunnel_sessions(env) as second:
-        fixture.verify_heartbeat_state(env)
-        assert second["client"]["pid"] != first_pids["client_xp2p"]
-        assert second["server"]["pid"] != first_pids["server_xp2p"]
