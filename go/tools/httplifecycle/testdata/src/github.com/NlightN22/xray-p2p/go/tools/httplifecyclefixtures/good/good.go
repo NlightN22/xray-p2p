@@ -36,6 +36,21 @@ func accessorFactory() doer {
 	return existingSharedClient()
 }
 
+type clientHolder struct {
+	client ownedhttp.OwnedClient
+}
+
+func sharedStructFactory() doer {
+	return clientHolder{client: sharedOwner}.client
+}
+
+func sharedClosureFactory() doer {
+	accessor := func() doer {
+		return sharedOwner
+	}
+	return accessor()
+}
+
 func shared(client doer, req *http.Request) {
 	_, _ = client.Do(req)
 }

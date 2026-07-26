@@ -11,12 +11,14 @@ import (
 )
 
 type ownershipAnalysis struct {
-	pass       *analysis.Pass
-	files      []*fileAllowances
-	resultMemo map[functionResult]bool
-	visiting   map[functionResult]bool
-	reported   map[token.Pos]bool
-	inspected  map[*ssa.Function]bool
+	pass           *analysis.Pass
+	files          []*fileAllowances
+	resultMemo     map[functionResult]bool
+	visiting       map[functionResult]bool
+	reported       map[token.Pos]bool
+	inspected      map[*ssa.Function]bool
+	traceValues    map[ssa.Value]bool
+	traceAddresses map[ssa.Value]bool
 }
 
 type functionResult struct {
@@ -27,12 +29,14 @@ type functionResult struct {
 func inspectFactoryOwnership(pass *analysis.Pass, files []*fileAllowances) {
 	ssaResult := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA)
 	analysis := ownershipAnalysis{
-		pass:       pass,
-		files:      files,
-		resultMemo: make(map[functionResult]bool),
-		visiting:   make(map[functionResult]bool),
-		reported:   make(map[token.Pos]bool),
-		inspected:  make(map[*ssa.Function]bool),
+		pass:           pass,
+		files:          files,
+		resultMemo:     make(map[functionResult]bool),
+		visiting:       make(map[functionResult]bool),
+		reported:       make(map[token.Pos]bool),
+		inspected:      make(map[*ssa.Function]bool),
+		traceValues:    make(map[ssa.Value]bool),
+		traceAddresses: make(map[ssa.Value]bool),
 	}
 	for _, function := range ssaResult.SrcFuncs {
 		analysis.inspectFunctionTree(function)
@@ -80,37 +84,6 @@ func (a *ownershipAnalysis) inspectReturns(function *ssa.Function) {
 			}
 		}
 	}
-}
-
-func (a *ownershipAnalysis) creationOrigins(value ssa.Value, seen map[ssa.Value]bool) []token.Pos {
-	if value == nil || seen[value] {
-		return nil
-	}
-	seen[value] = true
-	switch current := value.(type) {
-	case *ssa.Call:
-		if a.callResultCreatesOwned(&current.Call, 0) {
-			return []token.Pos{current.Pos()}
-		}
-	case *ssa.Extract:
-		call, ok := current.Tuple.(*ssa.Call)
-		if ok && a.callResultCreatesOwned(&call.Call, current.Index) {
-			return []token.Pos{call.Pos()}
-		}
-	case *ssa.ChangeInterface:
-		return a.creationOrigins(current.X, seen)
-	case *ssa.Convert:
-		return a.creationOrigins(current.X, seen)
-	case *ssa.MakeInterface:
-		return a.creationOrigins(current.X, seen)
-	case *ssa.Phi:
-		var origins []token.Pos
-		for _, edge := range current.Edges {
-			origins = append(origins, a.creationOrigins(edge, seen)...)
-		}
-		return uniquePositions(origins)
-	}
-	return nil
 }
 
 func (a *ownershipAnalysis) callResultCreatesOwned(call *ssa.CallCommon, index int) bool {

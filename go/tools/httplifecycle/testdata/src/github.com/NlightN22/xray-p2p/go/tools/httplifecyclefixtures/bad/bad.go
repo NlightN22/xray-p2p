@@ -61,6 +61,25 @@ func branchingClientFactory(useShared bool) doer {
 	return client
 }
 
+type clientHolder struct {
+	client ownedhttp.OwnedClient
+}
+
+func structClientFactory() doer {
+	holder := clientHolder{
+		client: ownedhttp.NewClient(ownedhttp.ClientOptions{}), // want "return an owned HTTP client from this factory"
+	}
+	return holder.client
+}
+
+func closureClientFactory() doer {
+	client := ownedhttp.NewClient(ownedhttp.ClientOptions{}) // want "return an owned HTTP client from this factory"
+	accessor := func() doer {
+		return client
+	}
+	return accessor()
+}
+
 func bad(req *http.Request) {
 	_ = http.Client{}              // want "construct http.Client through"
 	_ = &alias{}                   // want "construct http.Client through"
