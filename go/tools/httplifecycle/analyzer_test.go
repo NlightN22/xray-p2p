@@ -8,5 +8,6 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
-	analysistest.Run(t, testdata, Analyzer, "bad", "dot", "good")
+	const fixtures = "github.com/NlightN22/xray-p2p/go/tools/httplifecyclefixtures/"
+	analysistest.Run(t, testdata, Analyzer, fixtures+"bad", fixtures+"dot", fixtures+"good")
 }

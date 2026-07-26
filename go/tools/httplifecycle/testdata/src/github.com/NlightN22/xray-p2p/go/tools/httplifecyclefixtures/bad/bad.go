@@ -5,31 +5,14 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 type alias = http.Client
 
 type doer interface {
 	Do(*http.Request) (*http.Response, error)
-}
-
-type ownedDoer interface {
-	doer
-	Shutdown(context.Context) error
-}
-
-type ownedClient struct{}
-
-func (ownedClient) Do(*http.Request) (*http.Response, error) { return nil, nil }
-func (ownedClient) Shutdown(context.Context) error           { return nil }
-
-type clientOptions struct {
-	TLSConfig   *tls.Config
-	DialContext func(context.Context, string, string) (net.Conn, error)
-}
-
-func newOwnedClient(clientOptions) ownedDoer {
-	return ownedClient{}
 }
 
 func customDial(context.Context, string, string) (net.Conn, error) {
@@ -41,13 +24,13 @@ func clientFactory() doer {
 }
 
 func haClientFactory() doer {
-	return newOwnedClient(clientOptions{ // want "return an owned HTTP client from this factory"
+	return ownedhttp.NewClient(ownedhttp.ClientOptions{ // want "return an owned HTTP client from this factory"
 		TLSConfig: &tls.Config{InsecureSkipVerify: true},
 	})
 }
 
 func assignedSCIMClientFactory() doer {
-	client := newOwnedClient(clientOptions{ // want "return an owned HTTP client from this factory"
+	client := ownedhttp.NewClient(ownedhttp.ClientOptions{ // want "return an owned HTTP client from this factory"
 		TLSConfig:   &tls.Config{MinVersion: tls.VersionTLS12},
 		DialContext: customDial,
 	})
@@ -55,12 +38,27 @@ func assignedSCIMClientFactory() doer {
 }
 
 func namedClientFactory() (client doer) {
-	client = newOwnedClient(clientOptions{}) // want "return an owned HTTP client from this factory"
+	client = ownedhttp.NewClient(ownedhttp.ClientOptions{}) // want "return an owned HTTP client from this factory"
 	return
 }
 
 var callbackFactory = func() doer {
-	return newOwnedClient(clientOptions{}) // want "return an owned HTTP client from this factory"
+	return ownedhttp.NewClient(ownedhttp.ClientOptions{}) // want "return an owned HTTP client from this factory"
+}
+
+func tupleClientFactory() (doer, error) {
+	client, err := ownedhttp.NewClientWithError(ownedhttp.ClientOptions{}) // want "return an owned HTTP client from this factory"
+	return client, err
+}
+
+var sharedClient ownedhttp.OwnedClient
+
+func branchingClientFactory(useShared bool) doer {
+	client := ownedhttp.NewClient(ownedhttp.ClientOptions{}) // want "return an owned HTTP client from this factory"
+	if useShared {
+		client = sharedClient
+	}
+	return client
 }
 
 func bad(req *http.Request) {

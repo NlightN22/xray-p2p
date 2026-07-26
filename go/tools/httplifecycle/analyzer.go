@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/buildssa"
 )
 
 const (
@@ -29,7 +30,10 @@ var (
 var Analyzer = &analysis.Analyzer{
 	Name: "httplifecycle",
 	Doc:  "enforces explicit ownership of HTTP clients, transports, and servers",
-	Run:  run,
+	Requires: []*analysis.Analyzer{
+		buildssa.Analyzer,
+	},
+	Run: run,
 }
 
 type allowance struct {
@@ -44,15 +48,21 @@ type fileAllowances struct {
 }
 
 func run(pass *analysis.Pass) (any, error) {
+	files := make([]*fileAllowances, 0, len(pass.Files))
 	for _, file := range pass.Files {
 		if strings.HasSuffix(pass.Fset.Position(file.Pos()).Filename, "_test.go") {
 			continue
 		}
 		allowed := parseAllowances(pass, file)
+		files = append(files, allowed)
 		if pass.Pkg.Path() != infrastructurePkg {
 			inspectFile(pass, file, allowed)
-			inspectFactoryOwnership(pass, file, allowed)
 		}
+	}
+	if pass.Pkg.Path() != infrastructurePkg {
+		inspectFactoryOwnership(pass, files)
+	}
+	for _, allowed := range files {
 		reportUnusedAllowances(pass, allowed)
 	}
 	return nil, nil
