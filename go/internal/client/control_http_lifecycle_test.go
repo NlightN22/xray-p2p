@@ -180,6 +180,7 @@ func TestSubscriptionRunnerShutdownClosesActiveResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer response.Body.Close()
 	runner := subscriptionSyncRunner{timeout: time.Second, clients: pool}
 	runner.shutdown()
 	select {

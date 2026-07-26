@@ -46,6 +46,7 @@ func pingHTTPS(ctx context.Context, addr string, timeout time.Duration, seq int,
 	if err != nil {
 		return 0, err
 	}
+	defer resp.Body.Close()
 	defer ownedhttp.DrainAndClose(resp, 1<<20)
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {

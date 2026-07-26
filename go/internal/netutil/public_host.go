@@ -102,6 +102,7 @@ func httpPublicIP(url string) hostProvider {
 		if err != nil {
 			return "", err
 		}
+		defer resp.Body.Close()
 		defer ownedhttp.DrainAndClose(resp, 64<<10)
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {

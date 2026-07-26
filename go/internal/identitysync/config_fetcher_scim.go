@@ -104,6 +104,7 @@ func (f ConfigFetcher) scimGet(ctx context.Context, client ownedhttp.Doer, url s
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	defer ownedhttp.DrainAndClose(resp, maxSCIMResponseBytes)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSCIMResponseBytes+1))
 	if err != nil {

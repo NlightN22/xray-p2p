@@ -63,6 +63,7 @@ func (c SyncClient) Prepare(ctx context.Context, peer Peer, generation Generatio
 	if err != nil {
 		return Acknowledgement{}, err
 	}
+	defer response.Body.Close()
 	defer ownedhttp.DrainAndClose(response, maxSyncResponseBytes)
 	var ack Acknowledgement
 	if err := decodeSyncResponse(response.Body, &ack); err != nil {
@@ -98,6 +99,7 @@ func (c SyncClient) Commit(ctx context.Context, peer Peer, generation Generation
 	if err != nil {
 		return Generation{}, err
 	}
+	defer response.Body.Close()
 	defer ownedhttp.DrainAndClose(response, maxSyncResponseBytes)
 	if response.StatusCode != http.StatusOK {
 		return Generation{}, fmt.Errorf("HA peer %q commit failed: %s", peer.ID, response.Status)

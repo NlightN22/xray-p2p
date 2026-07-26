@@ -51,7 +51,6 @@ func (s HTTPSource) Fetch(ctx context.Context, knownRevision string) (RawSnapsho
 	}
 	base := s.Client
 	if base == nil {
-		//nethttp-lifecycle:allow default-client owner=HTTPSource.Fetch lifetime=request reason=client value clone shares the process default transport
 		base = http.DefaultClient
 	}
 	client := *base
@@ -82,6 +81,7 @@ func (s HTTPSource) Fetch(ctx context.Context, knownRevision string) (RawSnapsho
 	if err != nil {
 		return RawSnapshot{}, errors.New("fetch subscription: request failed")
 	}
+	defer resp.Body.Close()
 	defer ownedhttp.DrainAndClose(resp, maxBytes+1)
 	if resp.StatusCode == http.StatusNotModified {
 		return RawSnapshot{}, ErrNotModified

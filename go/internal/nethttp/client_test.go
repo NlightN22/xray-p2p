@@ -51,7 +51,11 @@ func TestOwnedClientReusesConnectionAndClosesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, time.Second, func() bool { return closed.Load() == opened.Load() })
-	if _, err := client.Do(newRequest(t, server.URL)); !errors.Is(err, ErrClientClosed) {
+	response, err := client.Do(newRequest(t, server.URL))
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if !errors.Is(err, ErrClientClosed) {
 		t.Fatalf("request after shutdown error = %v, want %v", err, ErrClientClosed)
 	}
 }
@@ -67,7 +71,10 @@ func TestOwnedClientShutdownCancelsActiveRequest(t *testing.T) {
 	client := NewClient(ClientOptions{Timeout: 10 * time.Second})
 	requestDone := make(chan error, 1)
 	go func() {
-		_, err := client.Do(newRequest(t, server.URL))
+		response, err := client.Do(newRequest(t, server.URL))
+		if err == nil {
+			_ = response.Body.Close()
+		}
 		requestDone <- err
 	}()
 	<-started
@@ -105,6 +112,7 @@ func TestOwnedClientShutdownClosesReturnedResponseBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer response.Body.Close()
 	<-started
 
 	shutdownCtx, cancel := context.WithTimeout(t.Context(), time.Second)

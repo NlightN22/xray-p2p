@@ -118,6 +118,7 @@ func download(ctx context.Context, client ownedhttp.Doer, url, target string) er
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
+	defer resp.Body.Close()
 	defer ownedhttp.DrainAndClose(resp, maxDownloadSize+1)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("download %s: unexpected HTTP status %s", url, resp.Status)
