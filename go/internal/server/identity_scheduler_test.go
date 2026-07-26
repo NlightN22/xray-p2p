@@ -5,6 +5,8 @@ package server
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,6 +74,56 @@ func TestIdentitySchedulerStopReportsDeadline(t *testing.T) {
 	defer joinCancel()
 	if err := stop(joinCtx); err != nil {
 		t.Fatalf("join released scheduler: %v", err)
+	}
+}
+
+func TestIdentitySchedulerConcurrentStopCallsCancelAndJoinOnce(t *testing.T) {
+	previous := IdentitySnapshotFetcher
+	t.Cleanup(func() { IdentitySnapshotFetcher = previous })
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var fetches atomic.Int32
+	IdentitySnapshotFetcher = schedulerFetcher(func(ctx context.Context, _ identitysync.ProviderRef) (identitysync.Snapshot, error) {
+		if fetches.Add(1) == 1 {
+			close(started)
+		}
+		<-ctx.Done()
+		<-release
+		return identitysync.Snapshot{}, ctx.Err()
+	})
+
+	stop := startIdentitySyncScheduler(context.Background(), schedulerConfig())
+	<-started
+
+	const callers = 16
+	ready := sync.WaitGroup{}
+	ready.Add(callers)
+	begin := make(chan struct{})
+	results := make(chan error, callers)
+	for range callers {
+		go func() {
+			ready.Done()
+			<-begin
+			stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			results <- stop(stopCtx)
+		}()
+	}
+	ready.Wait()
+	close(begin)
+	select {
+	case err := <-results:
+		t.Fatalf("concurrent stop returned before scheduler worker exited: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	for range callers {
+		if err := <-results; err != nil {
+			t.Fatalf("concurrent stop error: %v", err)
+		}
+	}
+	if got := fetches.Load(); got != 1 {
+		t.Fatalf("identity sync fetches = %d, want 1", got)
 	}
 }
 
