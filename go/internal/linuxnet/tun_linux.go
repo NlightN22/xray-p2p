@@ -44,6 +44,10 @@ func EnsureTunInterfaceContext(ctx context.Context, name, addr string, mtu int) 
 }
 
 func RemoveTunInterfaceIfManaged(name string) error {
+	return RemoveTunInterfaceIfManagedContext(context.Background(), name)
+}
+
+func RemoveTunInterfaceIfManagedContext(ctx context.Context, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil
@@ -51,20 +55,24 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-	if !linkExists(name) {
+	if !linkExistsContext(ctx, name) {
 		return nil
 	}
-	return runCommand("ip", "link", "del", name)
+	return runCommandContext(ctx, "ip", "link", "del", name)
 }
 
 func RemoveTunInterfacesExcept(activeName string, names ...string) error {
+	return RemoveTunInterfacesExceptContext(context.Background(), activeName, names...)
+}
+
+func RemoveTunInterfacesExceptContext(ctx context.Context, activeName string, names ...string) error {
 	activeName = strings.TrimSpace(activeName)
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if name == "" || strings.EqualFold(name, activeName) {
 			continue
 		}
-		if err := RemoveTunInterfaceIfManaged(name); err != nil {
+		if err := RemoveTunInterfaceIfManagedContext(ctx, name); err != nil {
 			return err
 		}
 	}
@@ -174,6 +182,10 @@ func EnsureRouteContext(ctx context.Context, name, cidr string) error {
 }
 
 func RemoveRoute(name, cidr string) error {
+	return RemoveRouteContext(context.Background(), name, cidr)
+}
+
+func RemoveRouteContext(ctx context.Context, name, cidr string) error {
 	name = strings.TrimSpace(name)
 	cidr = strings.TrimSpace(cidr)
 	if name == "" || cidr == "" {
@@ -185,7 +197,7 @@ func RemoveRoute(name, cidr string) error {
 	if _, err := execLookPath("ip"); err != nil {
 		return errors.New("ip command not found")
 	}
-	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
+	if err := runCommandContext(ctx, "ip", "route", "del", cidr, "dev", name); err != nil {
 		if isMissingRouteError(err) {
 			return nil
 		}

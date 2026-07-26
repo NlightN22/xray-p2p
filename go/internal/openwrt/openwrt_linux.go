@@ -126,6 +126,10 @@ func EnsureTunRouteContext(ctx context.Context, name, cidr string) error {
 }
 
 func RemoveTunRoute(name, cidr string) error {
+	return RemoveTunRouteContext(context.Background(), name, cidr)
+}
+
+func RemoveTunRouteContext(ctx context.Context, name, cidr string) error {
 	name = strings.TrimSpace(name)
 	cidr = strings.TrimSpace(cidr)
 	if name == "" || cidr == "" {
@@ -137,7 +141,7 @@ func RemoveTunRoute(name, cidr string) error {
 	if _, err := exec.LookPath("ip"); err != nil {
 		return errors.New("ip command not found (OpenWrt required)")
 	}
-	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
+	if err := runCommandContext(ctx, "ip", "route", "del", cidr, "dev", name); err != nil {
 		if isMissingRouteError(err) {
 			return nil
 		}
@@ -147,6 +151,10 @@ func RemoveTunRoute(name, cidr string) error {
 }
 
 func RemoveTunInterfaceIfManaged(name string) error {
+	return RemoveTunInterfaceIfManagedContext(context.Background(), name)
+}
+
+func RemoveTunInterfaceIfManagedContext(ctx context.Context, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil
@@ -158,7 +166,7 @@ func RemoveTunInterfaceIfManaged(name string) error {
 		return errors.New("uci command not found (OpenWrt required)")
 	}
 
-	managed, exists, err := isManagedInterface(name)
+	managed, exists, err := isManagedInterfaceContext(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -170,13 +178,13 @@ func RemoveTunInterfaceIfManaged(name string) error {
 		return nil
 	}
 
-	if err := runCommand("uci", "-q", "delete", "network."+name); err != nil {
+	if err := runCommandContext(ctx, "uci", "-q", "delete", "network."+name); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "commit", "network"); err != nil {
+	if err := runCommandContext(ctx, "uci", "commit", "network"); err != nil {
 		return err
 	}
-	if err := runCommand("/etc/init.d/network", "reload"); err != nil {
+	if err := runCommandContext(ctx, "/etc/init.d/network", "reload"); err != nil {
 		return err
 	}
 	logging.Info("OpenWrt TUN interface removed", "interface", name)

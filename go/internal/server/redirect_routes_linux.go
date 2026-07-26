@@ -32,18 +32,22 @@ func ensureRedirectRouteContext(ctx context.Context, tunName, cidr string) error
 }
 
 func removeRedirectRoute(tunName, cidr string) error {
+	return removeRedirectRouteContext(context.Background(), tunName, cidr)
+}
+
+func removeRedirectRouteContext(ctx context.Context, tunName, cidr string) error {
 	tun := strings.TrimSpace(tunName)
 	if tun == "" {
 		return nil
 	}
-	if err := openwrt.RemoveTunRoute(tun, cidr); err != nil {
+	if err := openwrt.RemoveTunRouteContext(ctx, tun, cidr); err != nil {
 		if linuxnet.IsTunPermissionError(err) {
 			logging.Warn("redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
 			return nil
 		}
 		return err
 	}
-	if err := linuxnet.RemoveRoute(tun, cidr); err != nil {
+	if err := linuxnet.RemoveRouteContext(ctx, tun, cidr); err != nil {
 		if linuxnet.IsTunPermissionError(err) {
 			logging.Warn("redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
 			return nil
@@ -98,6 +102,10 @@ func isMissingDeviceError(err error) bool {
 }
 
 func removeRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
+	return removeRedirectRoutesContext(context.Background(), tunName, "", redirects)
+}
+
+func removeRedirectRoutesContext(ctx context.Context, tunName, _ string, redirects []redirect.Rule) error {
 	seen := make(map[string]struct{}, len(redirects))
 	for _, rule := range redirects {
 		if rule.Kind() != redirect.KindCIDR {
@@ -115,7 +123,10 @@ func removeRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
 			continue
 		}
 		seen[key] = struct{}{}
-		if err := removeRedirectRoute(tunName, value); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := removeRedirectRouteContext(ctx, tunName, value); err != nil {
 			return err
 		}
 	}

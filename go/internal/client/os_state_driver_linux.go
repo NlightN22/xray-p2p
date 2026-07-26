@@ -25,7 +25,7 @@ func (d *linuxOSStateDriver) EnsureTunReady(ctx context.Context, desired Desired
 	if !desired.TunEnabled {
 		return ObservedOSState{}, nil
 	}
-	if err := linuxnet.RemoveTunInterfacesExcept(desired.TunName, "xp2pc", "xp2ps"); err != nil {
+	if err := linuxnet.RemoveTunInterfacesExceptContext(ctx, desired.TunName, "xp2pc", "xp2ps"); err != nil {
 		return ObservedOSState{}, err
 	}
 	if err := linuxnet.EnsureTunAddressContext(ctx, desired.TunName, desired.TunAddr, desired.TunMTU); err != nil {
@@ -38,14 +38,14 @@ func (d *linuxOSStateDriver) EnsureSplit(ctx context.Context, desired DesiredOSS
 	if !desired.TunEnabled {
 		return false, nil
 	}
-	if err := applyRedirectRoutes(desired.TunName, desired.TunAddr, desired.Install.Redirects); err != nil {
+	if err := applyRedirectRoutesContext(ctx, desired.TunName, desired.TunAddr, desired.Install.Redirects); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 func (d *linuxOSStateDriver) RemoveSplit(ctx context.Context, desired DesiredOSState) error {
-	return removeRedirectRoutes(desired.TunName, desired.TunAddr, desired.Install.Redirects)
+	return removeRedirectRoutesContext(ctx, desired.TunName, desired.TunAddr, desired.Install.Redirects)
 }
 
 func (d *linuxOSStateDriver) EnsureFull(ctx context.Context, desired DesiredOSState) (bool, error) {

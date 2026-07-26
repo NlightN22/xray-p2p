@@ -120,6 +120,62 @@ func TestServerWriteTimeoutReleasesSlowResponseConsumer(t *testing.T) {
 	}
 }
 
+func TestShutdownOwnedForceClosesActiveRequestAtDeadline(t *testing.T) {
+	started := make(chan struct{})
+	handlerDone := make(chan struct{})
+	server := NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		close(started)
+		<-request.Context().Done()
+		close(handlerDone)
+	}), ServerOptions{})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(listener) }()
+
+	conn, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := io.WriteString(conn, "GET / HTTP/1.1\r\nHost: test\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	begin := time.Now()
+	err = server.ShutdownOwned(stopCtx, listener)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ShutdownOwned error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(begin); elapsed > time.Second {
+		t.Fatalf("forced shutdown exceeded bound: %s", elapsed)
+	}
+	select {
+	case <-handlerDone:
+	case <-time.After(time.Second):
+		t.Fatal("active handler remained after forced shutdown")
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err := conn.Read(make([]byte, 1)); err == nil {
+		t.Fatal("active request connection remained open after forced shutdown")
+	}
+	metricsDeadline := time.Now().Add(time.Second)
+	for server.Metrics().Current != 0 && time.Now().Before(metricsDeadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if metrics := server.Metrics(); metrics.Current != 0 || metrics.Active != 0 {
+		t.Fatalf("active connection remained in metrics: %#v", metrics)
+	}
+	if err := <-serveDone; !errors.Is(err, http.ErrServerClosed) {
+		t.Fatalf("Serve error = %v", err)
+	}
+}
+
 func TestServerReadHeaderTimeoutClosesIncompleteHeader(t *testing.T) {
 	server := NewServer(http.NotFoundHandler(), ServerOptions{ReadHeaderTimeout: 50 * time.Millisecond})
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

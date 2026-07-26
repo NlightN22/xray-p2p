@@ -148,10 +148,10 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			return tunSetupErrorWithHint("client run", err)
 		}
 	} else {
-		if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+		if err := openwrt.RemoveTunInterfaceIfManagedContext(ctx, opts.TunName); err != nil {
 			return err
 		}
-		if err := linuxnet.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+		if err := linuxnet.RemoveTunInterfaceIfManagedContext(ctx, opts.TunName); err != nil {
 			return err
 		}
 	}

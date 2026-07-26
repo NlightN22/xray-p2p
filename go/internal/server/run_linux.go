@@ -130,17 +130,17 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 	if tunEnabled {
-		if err := linuxnet.RemoveTunInterfacesExcept(opts.TunName, "xp2pc", "xp2ps"); err != nil {
+		if err := linuxnet.RemoveTunInterfacesExceptContext(ctx, opts.TunName, "xp2pc", "xp2ps"); err != nil {
 			return err
 		}
 		if err := ensureServerTunSetup(ctx, opts); err != nil {
 			return tunSetupErrorWithHint("server run", err)
 		}
 	} else {
-		if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+		if err := openwrt.RemoveTunInterfaceIfManagedContext(ctx, opts.TunName); err != nil {
 			return err
 		}
-		if err := linuxnet.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+		if err := linuxnet.RemoveTunInterfaceIfManagedContext(ctx, opts.TunName); err != nil {
 			return err
 		}
 	}
