@@ -16,12 +16,13 @@ const (
 )
 
 var (
-	allowPattern = regexp.MustCompile(`^nethttp-lifecycle:allow (http-client-constructor|http-transport-constructor|http-server-constructor|inline-http-do) owner=\S+ lifetime=\S+ reason=\S(?:.*\S)?$`)
+	allowPattern = regexp.MustCompile(`^nethttp-lifecycle:allow (\S+) owner=([A-Za-z][A-Za-z0-9_.-]{2,}) lifetime=(request|operation|scope|runner|service|process) reason=(\S(?:.*\S)?)$`)
 	validRules   = map[string]bool{
 		"http-client-constructor":    true,
 		"http-transport-constructor": true,
 		"http-server-constructor":    true,
 		"inline-http-do":             true,
+		"owned-client-result":        true,
 	}
 )
 
@@ -50,6 +51,7 @@ func run(pass *analysis.Pass) (any, error) {
 		allowed := parseAllowances(pass, file)
 		if pass.Pkg.Path() != infrastructurePkg {
 			inspectFile(pass, file, allowed)
+			inspectFactoryOwnership(pass, file, allowed)
 		}
 		reportUnusedAllowances(pass, allowed)
 	}
@@ -64,19 +66,40 @@ func parseAllowances(pass *analysis.Pass, file *ast.File) *fileAllowances {
 			if !strings.HasPrefix(text, allowPrefix) {
 				continue
 			}
-			if !allowPattern.MatchString(text) {
+			matches := allowPattern.FindStringSubmatch(text)
+			if matches == nil {
 				pass.Reportf(comment.Pos(), "invalid HTTP lifecycle allowance; use %q", allowPrefix+" <rule> owner=<owner> lifetime=<lifetime> reason=<reason>")
 				continue
 			}
-			fields := strings.Fields(text)
-			if len(fields) < 2 || !validRules[fields[1]] {
+			if !validRules[matches[1]] {
 				pass.Reportf(comment.Pos(), "unknown HTTP lifecycle allowance rule")
 				continue
 			}
-			result.allowances = append(result.allowances, &allowance{rule: fields[1], end: comment.End()})
+			if !declaresOwner(pass, file, matches[2]) {
+				pass.Reportf(comment.Pos(), "HTTP lifecycle allowance owner must name a declaration in the same file")
+				continue
+			}
+			if len(matches[4]) < 16 || len(strings.Fields(matches[4])) < 3 {
+				pass.Reportf(comment.Pos(), "HTTP lifecycle allowance reason must contain at least three words and 16 characters")
+				continue
+			}
+			result.allowances = append(result.allowances, &allowance{rule: matches[1], end: comment.End()})
 		}
 	}
 	return result
+}
+
+func declaresOwner(pass *analysis.Pass, file *ast.File, owner string) bool {
+	if separator := strings.LastIndexByte(owner, '.'); separator >= 0 {
+		owner = owner[separator+1:]
+	}
+	for identifier, object := range pass.TypesInfo.Defs {
+		if identifier.Name == owner && object != nil &&
+			identifier.Pos() >= file.Pos() && identifier.Pos() <= file.End() {
+			return true
+		}
+	}
+	return false
 }
 
 func inspectFile(pass *analysis.Pass, file *ast.File, allowed *fileAllowances) {

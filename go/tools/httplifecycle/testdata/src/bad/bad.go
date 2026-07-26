@@ -1,6 +1,9 @@
 package bad
 
 import (
+	"context"
+	"crypto/tls"
+	"net"
 	"net/http"
 )
 
@@ -10,8 +13,54 @@ type doer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+type ownedDoer interface {
+	doer
+	Shutdown(context.Context) error
+}
+
+type ownedClient struct{}
+
+func (ownedClient) Do(*http.Request) (*http.Response, error) { return nil, nil }
+func (ownedClient) Shutdown(context.Context) error           { return nil }
+
+type clientOptions struct {
+	TLSConfig   *tls.Config
+	DialContext func(context.Context, string, string) (net.Conn, error)
+}
+
+func newOwnedClient(clientOptions) ownedDoer {
+	return ownedClient{}
+}
+
+func customDial(context.Context, string, string) (net.Conn, error) {
+	return nil, nil
+}
+
 func clientFactory() doer {
 	return http.DefaultClient
+}
+
+func haClientFactory() doer {
+	return newOwnedClient(clientOptions{ // want "return an owned HTTP client from this factory"
+		TLSConfig: &tls.Config{InsecureSkipVerify: true},
+	})
+}
+
+func assignedSCIMClientFactory() doer {
+	client := newOwnedClient(clientOptions{ // want "return an owned HTTP client from this factory"
+		TLSConfig:   &tls.Config{MinVersion: tls.VersionTLS12},
+		DialContext: customDial,
+	})
+	return client
+}
+
+func namedClientFactory() (client doer) {
+	client = newOwnedClient(clientOptions{}) // want "return an owned HTTP client from this factory"
+	return
+}
+
+var callbackFactory = func() doer {
+	return newOwnedClient(clientOptions{}) // want "return an owned HTTP client from this factory"
 }
 
 func bad(req *http.Request) {
@@ -29,5 +78,20 @@ func bad(req *http.Request) {
 /*nethttp-lifecycle:allow http-client-constructor owner=bad*/ // want "invalid HTTP lifecycle allowance"
 var malformed = http.Client{}                                 // want "construct http.Client through"
 
-/*nethttp-lifecycle:allow http-server-constructor owner=unused lifetime=scope reason=not-attached*/ // want "HTTP lifecycle allowance does not match"
+/*nethttp-lifecycle:allow http-server-constructor owner=unused lifetime=scope reason=exception is not attached*/ // want "HTTP lifecycle allowance does not match"
 var unused = 1
+
+/*nethttp-lifecycle:allow unknown-rule owner=unused lifetime=scope reason=sufficient explanation*/ // want "unknown HTTP lifecycle allowance rule"
+var unknownRule = 1
+
+/*nethttp-lifecycle:allow http-client-constructor owner=shortReason lifetime=request reason=x*/ // want "HTTP lifecycle allowance reason must contain at least three words and 16 characters"
+var shortReason = http.DefaultClient
+
+/*nethttp-lifecycle:allow http-client-constructor owner=x lifetime=request reason=this reason has enough words*/ // want "invalid HTTP lifecycle allowance"
+var shortOwner = http.DefaultClient
+
+/*nethttp-lifecycle:allow http-client-constructor owner=shortOwner lifetime=x reason=this reason has enough words*/ // want "invalid HTTP lifecycle allowance"
+var invalidLifetime = http.DefaultClient
+
+/*nethttp-lifecycle:allow http-client-constructor owner=absentOwner lifetime=request reason=this reason has enough words*/ // want "owner must name a declaration"
+var missingOwner = http.DefaultClient
