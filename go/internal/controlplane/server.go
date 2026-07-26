@@ -25,6 +25,7 @@ type HandlerOptions struct {
 	Acknowledge func(userLabel string, credentialGeneration int) error
 	HAStore     *ha.Store
 	ReloadHA    func(*ha.Store) error
+	ReportError func(operation string, err error)
 }
 
 func NewHandler(opts HandlerOptions) http.Handler {
@@ -38,7 +39,7 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	if opts.HAStore != nil {
 		var haHandler http.Handler = ha.NewHTTPHandler(opts.HAStore)
 		if opts.ReloadHA != nil {
-			haHandler = reloadHAHandler(opts.HAStore, opts.ReloadHA, haHandler)
+			haHandler = reloadHAHandler(opts.HAStore, opts.ReloadHA, opts.ReportError, haHandler)
 		}
 		mux.Handle("/control/v1/ha/", haHandler)
 	}
@@ -69,6 +70,7 @@ func newHandler(opts HandlerOptions) *handler {
 		now:         opts.Now,
 		authWindow:  opts.AuthWindow,
 		acknowledge: opts.Acknowledge,
+		reportError: opts.ReportError,
 	}
 	if h.now == nil {
 		h.now = time.Now
@@ -76,9 +78,10 @@ func newHandler(opts HandlerOptions) *handler {
 	return h
 }
 
-func reloadHAHandler(store *ha.Store, reload func(*ha.Store) error, next http.Handler) http.Handler {
+func reloadHAHandler(store *ha.Store, reload func(*ha.Store) error, reportError func(string, error), next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := reload(store); err != nil {
+			reportOperationError(reportError, "reload HA state", err)
 			writeError(w, http.StatusServiceUnavailable, err.Error())
 			return
 		}
@@ -93,6 +96,7 @@ type handler struct {
 	now         func() time.Time
 	authWindow  time.Duration
 	acknowledge func(string, int) error
+	reportError func(string, error)
 	mu          sync.Mutex
 	challenges  map[string]rotationChallenge
 }
@@ -155,11 +159,22 @@ func (h *handler) ack(w http.ResponseWriter, r *http.Request) {
 		h.rotationAuthFailure(w)
 		return
 	}
-	if h.acknowledge == nil || h.acknowledge(user.UserLabel, user.CredentialGeneration) != nil {
+	if h.acknowledge == nil {
+		writeError(w, http.StatusServiceUnavailable, "rotation acknowledgement unavailable")
+		return
+	}
+	if err := h.acknowledge(user.UserLabel, user.CredentialGeneration); err != nil {
+		reportOperationError(h.reportError, "acknowledge credential", err)
 		writeError(w, http.StatusServiceUnavailable, "rotation acknowledgement unavailable")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func reportOperationError(report func(string, error), operation string, err error) {
+	if report != nil && err != nil {
+		report(operation, err)
+	}
 }
 
 func (h *handler) loadRotationRequest(w http.ResponseWriter, r *http.Request, req *RotationRequest) (Runtime, []byte, bool) {

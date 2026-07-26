@@ -99,6 +99,9 @@ func StartBackground(ctx context.Context, opts Options) (*BackgroundServer, erro
 		Acknowledge: func(userLabel string, generation int) error {
 			return AcknowledgeCredential(context.Background(), userLabel, generation)
 		},
+		ReportError: func(operation string, err error) {
+			logging.Error("control operation failed", "operation", operation, "err", err)
+		},
 	}), xnethttp.ServerOptions{})
 	return startOwnedHTTPServer(ctx, ln, srv, certPath, keyPath, "HTTPS control server", opts.ResourceLogInterval), nil
 }
