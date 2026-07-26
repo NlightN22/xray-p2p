@@ -775,7 +775,13 @@ def dump_failure_state(host: Host, label: str) -> None:
             "pgrep -af xp2p 2>/dev/null || true",
             "pgrep -af xray 2>/dev/null || true",
             "echo '--- sockets ---'",
-            "if command -v ss >/dev/null 2>&1; then ss -ltnp 2>/dev/null || true; fi",
+            "if command -v ss >/dev/null 2>&1; then "
+            "echo '--- listening ---'; ss -ltnp 2>/dev/null || true; "
+            "echo '--- all TCP with owners ---'; sudo -n ss -tanp 2>/dev/null || true; "
+            "echo '--- TCP state and peer distribution ---'; "
+            "sudo -n ss -Htan 2>/dev/null | awk '{state[$1]++; peer[$5]++} "
+            "END {for (name in state) print \"state\", name, state[name]; "
+            "for (name in peer) print \"peer\", name, peer[name]}' || true; fi",
             "echo '--- systemd status ---'",
             "systemctl --no-pager --full status xp2p-client 2>/dev/null || true",
             "systemctl --no-pager --full status xp2p-server 2>/dev/null || true",

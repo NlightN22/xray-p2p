@@ -33,7 +33,13 @@ on:
         default: ""
 
 jobs:
+  resource-plateau:
+    uses: ./.github/workflows/resource-plateau.yml
+    with:
+      profile: nightly
+
   aggregate:
+    needs: resource-plateau
     runs-on: ubuntu-latest
     permissions:
       contents: write

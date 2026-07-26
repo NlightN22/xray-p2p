@@ -1,6 +1,11 @@
 name: resource-plateau
 
 on:
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: string
   schedule:
     - cron: "17 1 * * *"
   workflow_dispatch:

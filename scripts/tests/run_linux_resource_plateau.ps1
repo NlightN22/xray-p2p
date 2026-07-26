@@ -12,10 +12,18 @@ $logPath = Join-Path $logRoot "pytest-linux-resource-plateau-$Profile-$stamp.log
 
 $env:XP2P_RUN_RESOURCE_PLATEAU = "1"
 $env:XP2P_RESOURCE_PLATEAU_PROFILE = $Profile
+$env:XP2P_RUN_HEARTBEAT_STORM_TESTS = "1"
+$testTargets = @(
+    "tests\host\linux\test_resource_plateau.py",
+    "tests\host\linux\test_subscription_control_plane.py::test_subscription_control_plane_uses_tls_and_hmac",
+    "tests\host\linux\test_heartbeat_netem_lab.py",
+    "tests\host\linux\test_network_lifecycle_shutdown.py::test_control_server_listener_closes_before_service_stop_returns",
+    "tests\host\linux\test_network_lifecycle_shutdown.py::test_running_xray_exits_before_service_stop_returns"
+)
 
 Push-Location $repoRoot
 try {
-    pytest tests\host\linux\test_resource_plateau.py -vv -s 2>&1 | Tee-Object -FilePath $logPath
+    pytest @testTargets -vv -s 2>&1 | Tee-Object -FilePath $logPath
     if ($LASTEXITCODE -ne 0) {
         throw "Linux resource plateau suite failed with exit code $LASTEXITCODE. Log: $logPath"
     }

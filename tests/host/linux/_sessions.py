@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 from testinfra.host import Host
 
 from ._guest_scripts import run_guest_script
+from ._guest_scripts import run_guest_script_with_env
 from ._process import stop_process
 from ._util import _install_marker, _posix
 
@@ -16,15 +17,23 @@ def xp2p_run_session(
     role: str,
     install_dir: str | Path | PurePosixPath,
     config_dir: str,
+    *,
+    runtime_metrics_file: str = "",
 ):
     install_arg = _posix(install_dir)
-    result = run_guest_script(
-        host,
-        "scripts/linux/start_xp2p_run.sh",
-        role,
-        install_arg,
-        config_dir,
-    )
+    args = ("scripts/linux/start_xp2p_run.sh", role, install_arg, config_dir)
+    if runtime_metrics_file:
+        result = run_guest_script_with_env(
+            host,
+            args[0],
+            {
+                "XP2P_RUNTIME_METRICS_FILE": runtime_metrics_file,
+                "XP2P_RUNTIME_METRICS_INTERVAL": "1s",
+            },
+            *args[1:],
+        )
+    else:
+        result = run_guest_script(host, *args)
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to start xp2p {role} run (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

@@ -371,23 +371,28 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             "client_primary_ip": client_primary_ip,
             "client_user": credential["user"],
             "client_password": credential["password"],
+            "client_link": credential["link"],
         }
     finally:
         cleanup()
 
 
 @contextmanager
-def active_tunnel_sessions(env: dict):
+def active_tunnel_sessions(env: dict, *, runtime_metrics: bool = False):
+    server_metrics = "/tmp/xp2p-server-runtime.metrics" if runtime_metrics else ""
+    client_metrics = "/tmp/xp2p-client-runtime.metrics" if runtime_metrics else ""
     with linux_env.xp2p_run_session(
         env["server_host"],
         "server",
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
+        runtime_metrics_file=server_metrics,
     ) as server_session, linux_env.xp2p_run_session(
         env["client_host"],
         "client",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
+        runtime_metrics_file=client_metrics,
     ) as client_session:
         time.sleep(2.0)
         wait_for_apply_request_clear(env["server_host"])
@@ -400,7 +405,10 @@ def active_tunnel_sessions(env: dict):
         client_socks_port = socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "xray.json")
         wait_for_port(env["server_host"], server_socks_port)
         wait_for_port(env["client_host"], client_socks_port)
-        yield {"server": server_session, "client": client_session}
+        yield {
+            "server": {**server_session, "runtime_metrics": server_metrics},
+            "client": {**client_session, "runtime_metrics": client_metrics},
+        }
 
 
 def server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = False):

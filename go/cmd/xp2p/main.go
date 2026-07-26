@@ -11,6 +11,7 @@ import (
 
 	rootcmd "github.com/NlightN22/xray-p2p/go/cmd/xp2p/root"
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeprobe"
 )
 
 type renderedError interface {
@@ -20,6 +21,7 @@ type renderedError interface {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	runtimeprobe.Start(ctx)
 
 	args := os.Args[1:]
 	cmd := rootcmd.NewCommandForArgs(args)
