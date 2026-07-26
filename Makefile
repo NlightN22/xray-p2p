@@ -24,7 +24,8 @@ WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'
 .PHONY: run build build-% fmt lint http-lifecycle-check test schema schema-check schema-test schema-compat vagrant-win10 vagrant-win10-destroy up-deb-test-c halt-deb-test-c provision-deb-test provision-deb-test-a provision-deb-test-b provision-deb-test-c \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
-	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map
+	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map \
+	resource-plateau resource-plateau-nightly
 
 build: $(TARGETS:%=build-%)
 
@@ -76,6 +77,12 @@ test-wsl:
 
 command-map:
 	wsl bash -lc "set -euo pipefail; $(WSL_CD); rm -rf commands_map; go run ./go/cmd/xp2p docs command-map --dir commands_map"
+
+resource-plateau:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tests/run_linux_resource_plateau.ps1 -Profile quick
+
+resource-plateau-nightly:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tests/run_linux_resource_plateau.ps1 -Profile nightly
 
 up-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up

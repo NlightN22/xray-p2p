@@ -383,12 +383,12 @@ def active_tunnel_sessions(env: dict):
         "server",
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
-    ), linux_env.xp2p_run_session(
+    ) as server_session, linux_env.xp2p_run_session(
         env["client_host"],
         "client",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
-    ):
+    ) as client_session:
         time.sleep(2.0)
         wait_for_apply_request_clear(env["server_host"])
         wait_for_apply_request_clear(env["client_host"])
@@ -400,7 +400,7 @@ def active_tunnel_sessions(env: dict):
         client_socks_port = socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "xray.json")
         wait_for_port(env["server_host"], server_socks_port)
         wait_for_port(env["client_host"], client_socks_port)
-        yield
+        yield {"server": server_session, "client": client_session}
 
 
 def server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = False):

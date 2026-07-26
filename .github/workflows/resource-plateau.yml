@@ -1,0 +1,50 @@
+name: resource-plateau
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Resource plateau duration profile
+        required: true
+        type: choice
+        default: nightly
+        options:
+          - quick
+          - nightly
+
+concurrency:
+  group: resource-plateau-vagrant
+  cancel-in-progress: false
+
+jobs:
+  linux-host:
+    runs-on: [self-hosted, Windows, X64, xp2p-vagrant]
+    timeout-minutes: 600
+    env:
+      XP2P_RESOURCE_PLATEAU_PROFILE: ${{ github.event_name == 'schedule' && 'nightly' || inputs.profile }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Linux test topology
+        shell: powershell
+        run: make up-deb12
+
+      - name: Run focused Linux resource plateau suite
+        shell: powershell
+        run: scripts/tests/run_linux_resource_plateau.ps1 -Profile $env:XP2P_RESOURCE_PLATEAU_PROFILE
+
+      - name: Upload resource diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-plateau-${{ github.run_id }}
+          path: .logs/tests/
+          if-no-files-found: warn
+
+      - name: Halt Linux test topology
+        if: always()
+        shell: powershell
+        run: make halt-deb12

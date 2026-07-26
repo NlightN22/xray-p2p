@@ -76,4 +76,3 @@ def xp2p_run_session_with_env(
         yield {"pid": int(pid_value)}
     finally:
         stop_process(host, pid_value)
-
