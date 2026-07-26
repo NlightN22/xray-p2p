@@ -2,6 +2,7 @@ package xrayassets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
-func Sync(ctx context.Context, cfg Config, opts Options) error {
+func Sync(ctx context.Context, cfg Config, opts Options) (returnErr error) {
 	assetDir := strings.TrimSpace(opts.AssetDir)
 	if assetDir == "" {
 		return fmt.Errorf("xray asset preflight failed: asset directory is required")
@@ -29,7 +30,9 @@ func Sync(ctx context.Context, cfg Config, opts Options) error {
 	client := opts.HTTPClient
 	if client == nil {
 		owned := ownedhttp.NewClient(ownedhttp.ClientOptions{Timeout: 30 * time.Second})
-		defer shutdownAssetClient(owned)
+		defer func() {
+			returnErr = errors.Join(returnErr, shutdownAssetClient(owned))
+		}()
 		client = owned
 	}
 	for _, file := range files {
@@ -149,8 +152,11 @@ func download(ctx context.Context, client ownedhttp.Doer, url, target string) er
 	return nil
 }
 
-func shutdownAssetClient(client ownedhttp.OwnedClient) {
+func shutdownAssetClient(client ownedhttp.OwnedClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = client.Shutdown(ctx)
+	if err := client.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown xray asset HTTP client: %w", err)
+	}
+	return nil
 }

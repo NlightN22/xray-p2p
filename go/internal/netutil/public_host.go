@@ -87,6 +87,7 @@ func resolvePublicIP(serverAddr, hostname string) hostProvider {
 
 // Query public IP using HTTP GET.
 func httpPublicIP(url string) hostProvider {
+	//nethttp-lifecycle:allow http-client-constructor owner=httpPublicIP lifetime=process reason=provider closure shares the process default transport
 	client := &http.Client{
 		Timeout: httpTimeout,
 	}

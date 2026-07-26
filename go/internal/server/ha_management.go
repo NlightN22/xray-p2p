@@ -210,19 +210,21 @@ func commitHACandidate(ctx context.Context, configPath string, candidate ha.Gene
 	insecureClient := ownedhttp.NewClient(ownedhttp.ClientOptions{
 		TLSConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
 	})
-	defer shutdownHAClient(secureClient)
-	defer shutdownHAClient(insecureClient)
 	coordinator := ha.Coordinator{Client: ha.SyncClient{HTTPClientForPeer: func(peer ha.Peer) ownedhttp.Doer {
 		if peer.AllowInsecure {
 			return insecureClient
 		}
 		return secureClient
 	}}}
-	return coordinator.Sync(ctx, store, candidate)
+	syncErr := coordinator.Sync(ctx, store, candidate)
+	return errors.Join(syncErr, shutdownHAClient(secureClient), shutdownHAClient(insecureClient))
 }
 
-func shutdownHAClient(client ownedhttp.OwnedClient) {
+func shutdownHAClient(client ownedhttp.OwnedClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = client.Shutdown(ctx)
+	if err := client.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown HA HTTP client: %w", err)
+	}
+	return nil
 }

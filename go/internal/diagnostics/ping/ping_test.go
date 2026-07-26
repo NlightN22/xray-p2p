@@ -3,18 +3,23 @@ package ping
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -43,13 +48,43 @@ func TestRunHandlesHTTPSReplies(t *testing.T) {
 func TestRunContinuousStopsOnContext(t *testing.T) {
 	setupLogging(t)
 
-	cancel, port := startBackgroundServer(t)
-	defer cancel()
+	var connections atomic.Int32
+	var closed atomic.Int32
+	var requests atomic.Int32
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		var request controlplane.PingRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(controlplane.PingResponse{Nonce: request.Nonce})
+	})
+	testServer := httptest.NewUnstartedServer(handler)
+	testServer.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			connections.Add(1)
+		case http.StateClosed:
+			closed.Add(1)
+		}
+	}
+	testServer.StartTLS()
+	defer testServer.Close()
+	host, portText, err := net.SplitHostPort(testServer.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runCtx, runCancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer runCancel()
 
-	err := Run(runCtx, "127.0.0.1", Options{
+	err = Run(runCtx, host, Options{
 		Timeout:       time.Second,
 		Port:          port,
 		AllowInsecure: true,
@@ -58,6 +93,19 @@ func TestRunContinuousStopsOnContext(t *testing.T) {
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected context deadline, got %v", err)
+	}
+	if got := requests.Load(); got < 2 {
+		t.Fatalf("continuous ping sent %d requests, want at least 2", got)
+	}
+	if got := connections.Load(); got != 1 {
+		t.Fatalf("continuous ping opened %d TCP connections, want 1", got)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for closed.Load() != connections.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got, want := closed.Load(), connections.Load(); got != want {
+		t.Fatalf("closed TCP connections = %d, want %d after Run returned", got, want)
 	}
 }
 

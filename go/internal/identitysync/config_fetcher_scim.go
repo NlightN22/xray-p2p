@@ -17,7 +17,7 @@ import (
 
 const maxSCIMResponseBytes = 4 << 20
 
-func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Snapshot, error) {
+func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (snapshot Snapshot, returnErr error) {
 	scim := f.Config.SCIM
 	endpoint := strings.TrimRight(strings.TrimSpace(scim.Endpoint), "/")
 	if endpoint == "" {
@@ -29,7 +29,9 @@ func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Sna
 	}
 	tlsConfig := &tls.Config{InsecureSkipVerify: scim.InsecureTLS} //nolint:gosec
 	client := ownedhttp.NewClient(ownedhttp.ClientOptions{Timeout: timeout, TLSConfig: tlsConfig})
-	defer shutdownSCIMClient(client)
+	defer func() {
+		returnErr = errors.Join(returnErr, shutdownSCIMClient(client))
+	}()
 	usersBody, err := f.scimGet(ctx, client, endpoint+"/users?briefRepresentation=true")
 	if err != nil {
 		return Snapshot{}, err
@@ -52,7 +54,7 @@ func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Sna
 	if !complete {
 		return Snapshot{Provider: provider, Complete: false}, nil
 	}
-	snapshot := Snapshot{Provider: provider, Complete: true}
+	snapshot = Snapshot{Provider: provider, Complete: true}
 	for _, user := range users {
 		id := firstIdentityValue(user.ID, user.UserName)
 		if id == "" {
@@ -116,8 +118,11 @@ func (f ConfigFetcher) scimGet(ctx context.Context, client ownedhttp.Doer, url s
 	return body, nil
 }
 
-func shutdownSCIMClient(client ownedhttp.OwnedClient) {
+func shutdownSCIMClient(client ownedhttp.OwnedClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = client.Shutdown(ctx)
+	if err := client.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown SCIM HTTP client: %w", err)
+	}
+	return nil
 }

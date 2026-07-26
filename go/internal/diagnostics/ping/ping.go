@@ -53,7 +53,7 @@ const (
 )
 
 // Run performs application-level ping against the xp2p service.
-func Run(ctx context.Context, target string, opts Options) error {
+func Run(ctx context.Context, target string, opts Options) (runErr error) {
 	if target == "" {
 		return errors.New("ping target is required")
 	}
@@ -82,7 +82,9 @@ func Run(ctx context.Context, target string, opts Options) error {
 			TLSConfig: tlsConfig,
 			Dialer:    newPingDialer(opts.SocksProxy, timeout),
 		})
-		defer shutdownHTTPClient(client)
+		defer func() {
+			runErr = errors.Join(runErr, shutdownHTTPClient(client))
+		}()
 		opts.HTTPClient = client
 	}
 
@@ -165,10 +167,13 @@ func Run(ctx context.Context, target string, opts Options) error {
 	return nil
 }
 
-func shutdownHTTPClient(client ownedhttp.OwnedClient) {
+func shutdownHTTPClient(client ownedhttp.OwnedClient) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
-	_ = client.Shutdown(ctx)
+	if err := client.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown ping HTTP client: %w", err)
+	}
+	return nil
 }
 
 func newNonce() (string, error) {
