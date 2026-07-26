@@ -48,7 +48,7 @@ func (d *windowsOSStateDriver) EnsureTunReady(ctx context.Context, desired Desir
 		}
 	}
 
-	go winnet.DisableIPv6BindingWithRetry(ctx, desired.TunName)
+	winnet.DisableIPv6BindingWithRetry(ctx, desired.TunName)
 
 	observed := ObservedOSState{
 		TunIfIndex: ifIndex,

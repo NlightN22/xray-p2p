@@ -42,6 +42,8 @@ type Options struct {
 	MaxWatchRestarts int
 	// WatchRestartWindow defines the rolling window for MaxWatchRestarts. Zero disables.
 	WatchRestartWindow time.Duration
+	// ShutdownTimeout bounds how long a cancelled child may delay service shutdown.
+	ShutdownTimeout time.Duration
 }
 
 // Run launches the supplied function, restarts it on failure, and watches the configured paths.
@@ -66,6 +68,10 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 	restartDelay := opts.RestartDelay
 	if restartDelay <= 0 {
 		restartDelay = 3 * time.Second
+	}
+	shutdownTimeout := opts.ShutdownTimeout
+	if shutdownTimeout <= 0 {
+		shutdownTimeout = 10 * time.Second
 	}
 
 	var watcher *pathWatcher
@@ -147,7 +153,9 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 			select {
 			case <-ctx.Done():
 				cancelChild()
-				<-errCh
+				if _, err := waitChild(errCh, shutdownTimeout); err != nil {
+					return fmt.Errorf("service %s: %w", name, err)
+				}
 				return nil
 			case err := <-errCh:
 				runErr = err
@@ -163,7 +171,11 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				restartPath = pendingPath
 				pendingRestart = false
 				cancelChild()
-				runErr = <-errCh
+				var waitErr error
+				runErr, waitErr = waitChild(errCh, shutdownTimeout)
+				if waitErr != nil {
+					return fmt.Errorf("service %s: %w", name, waitErr)
+				}
 				break waitLoop
 			case path, ok := <-watchCh:
 				if !ok {
@@ -190,7 +202,11 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				restarting = true
 				restartPath = path
 				cancelChild()
-				runErr = <-errCh
+				var waitErr error
+				runErr, waitErr = waitChild(errCh, shutdownTimeout)
+				if waitErr != nil {
+					return fmt.Errorf("service %s: %w", name, waitErr)
+				}
 				break waitLoop
 			case path, ok := <-fileWatchCh:
 				if !ok {
@@ -228,7 +244,11 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				restarting = true
 				restartPath = path
 				cancelChild()
-				runErr = <-errCh
+				var waitErr error
+				runErr, waitErr = waitChild(errCh, shutdownTimeout)
+				if waitErr != nil {
+					return fmt.Errorf("service %s: %w", name, waitErr)
+				}
 				break waitLoop
 			}
 		}
@@ -265,6 +285,17 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 
 		logging.Info("service stopped cleanly", "service", name)
 		return nil
+	}
+}
+
+func waitChild(errCh <-chan error, timeout time.Duration) (error, error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-errCh:
+		return err, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("child shutdown timed out after %s", timeout)
 	}
 }
 

@@ -26,6 +26,10 @@ type fileWatcher struct {
 	timers     map[string]*time.Timer
 	once       sync.Once
 	mu         sync.Mutex
+	done       chan struct{}
+	started    bool
+	closing    bool
+	timerWG    sync.WaitGroup
 }
 
 func newFileWatcher(files []string, debounce time.Duration) (*fileWatcher, error) {
@@ -49,6 +53,7 @@ func newFileWatcher(files []string, debounce time.Duration) (*fileWatcher, error
 		debounce:   debounce,
 		lastHashes: make(map[string]string, len(files)),
 		timers:     make(map[string]*time.Timer, len(files)),
+		done:       make(chan struct{}),
 	}
 
 	parentDirs := make(map[string]struct{})
@@ -84,10 +89,12 @@ func newFileWatcher(files []string, debounce time.Duration) (*fileWatcher, error
 	}
 
 	go watcher.run()
+	watcher.started = true
 	return watcher, nil
 }
 
 func (f *fileWatcher) run() {
+	defer close(f.done)
 	defer close(f.events)
 	for {
 		select {
@@ -129,11 +136,16 @@ func (f *fileWatcher) run() {
 func (f *fileWatcher) schedule(path string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.closing {
+		return
+	}
 	if timer, ok := f.timers[path]; ok {
 		timer.Reset(f.debounce)
 		return
 	}
+	f.timerWG.Add(1)
 	f.timers[path] = time.AfterFunc(f.debounce, func() {
+		defer f.timerWG.Done()
 		f.mu.Lock()
 		delete(f.timers, path)
 		f.mu.Unlock()
@@ -166,7 +178,20 @@ func (f *fileWatcher) refreshHash(path string) (bool, error) {
 
 func (f *fileWatcher) Close() error {
 	f.once.Do(func() {
+		f.mu.Lock()
+		f.closing = true
+		for path, timer := range f.timers {
+			if timer.Stop() {
+				f.timerWG.Done()
+			}
+			delete(f.timers, path)
+		}
+		f.mu.Unlock()
 		_ = f.w.Close()
+		f.timerWG.Wait()
+		if f.started {
+			<-f.done
+		}
 	})
 	return nil
 }

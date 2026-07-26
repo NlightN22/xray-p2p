@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -28,7 +29,9 @@ func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) func() {
 		Store:   identitysync.DefaultStore(),
 		Fetcher: IdentitySnapshotFetcher,
 	}
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		runIdentitySyncOnce(schedulerCtx, service, provider)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -41,7 +44,18 @@ func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) func() {
 			}
 		}
 	}()
-	return cancel
+	var stopOnce sync.Once
+	return func() {
+		stopOnce.Do(cancel)
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-done:
+		case <-timer.C:
+			logging.Warn("identity sync scheduler shutdown is still waiting for active work")
+			<-done
+		}
+	}
 }
 
 func runIdentitySyncOnce(ctx context.Context, service identitysync.Service, provider identitysync.ProviderRef) {

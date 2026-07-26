@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -224,6 +225,28 @@ func TestRunWatchLimiterSkipsAfterThreshold(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for service shutdown")
+	}
+}
+
+func TestRunReportsChildShutdownTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		<-started
+		cancel()
+	}()
+	err := Run(ctx, Options{
+		Name:            "stuck",
+		ShutdownTimeout: 20 * time.Millisecond,
+	}, func(context.Context) error {
+		close(started)
+		<-release
+		return nil
+	})
+	close(release)
+	if err == nil || !strings.Contains(err.Error(), "child shutdown timed out") {
+		t.Fatalf("expected child shutdown timeout, got %v", err)
 	}
 }
 

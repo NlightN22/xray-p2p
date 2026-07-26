@@ -120,16 +120,20 @@ func runXrayWithConfig(
 
 	procExit := make(chan struct{})
 	var waitErr error
+	var workers sync.WaitGroup
+	workers.Add(1)
 	go func() {
+		defer workers.Done()
 		waitErr = cmd.Wait()
 		close(procExit)
 	}()
 
 	guardCtx, cancelGuard := context.WithCancel(ctx)
-	defer cancelGuard()
+	workers.Add(1)
 	var guardMu sync.Mutex
 	var guardEvent *xrayguard.Event
 	go func() {
+		defer workers.Done()
 		eventCh := xrayguard.Monitor(guardCtx, pid, xrayguard.DefaultOptions())
 		for event := range eventCh {
 			guardMu.Lock()
@@ -161,10 +165,21 @@ func runXrayWithConfig(
 	}()
 
 	readyCtx, cancelReady := context.WithCancel(ctx)
-	defer cancelReady()
+	workers.Add(1)
 	go func() {
+		defer workers.Done()
 		<-procExit
 		cancelReady()
+	}()
+	defer func() {
+		cancelReady()
+		cancelGuard()
+		if !isClosed(procExit) && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			<-procExit
+		}
+		wg.Wait()
+		workers.Wait()
 	}()
 
 	logging.Info("xray-core process started", "path", xrayPath)

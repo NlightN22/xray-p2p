@@ -184,7 +184,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			if ctx.Err() != nil {
 				return nil
 			}
-			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
+			winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
 			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
 				logging.Warn("redirect route setup failed", "err", err)
 			}

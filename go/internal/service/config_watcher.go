@@ -68,6 +68,9 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 	}
 
 	stop := make(chan struct{})
+	done := make(chan struct{})
+	var stopOnce sync.Once
+	var callbacks sync.WaitGroup
 	var running int32
 	var rerun int32
 	var mu sync.Mutex
@@ -78,7 +81,9 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 			atomic.StoreInt32(&rerun, 1)
 			return
 		}
+		callbacks.Add(1)
 		go func(first string) {
+			defer callbacks.Done()
 			defer atomic.StoreInt32(&running, 0)
 			opts.OnChange(first)
 			if atomic.SwapInt32(&rerun, 0) == 1 {
@@ -88,6 +93,7 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 	}
 
 	go func() {
+		defer close(done)
 		defer func() {
 			if pathWatcher != nil {
 				_ = pathWatcher.Close()
@@ -135,6 +141,8 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 	}()
 
 	return func() {
-		close(stop)
+		stopOnce.Do(func() { close(stop) })
+		<-done
+		callbacks.Wait()
 	}, nil
 }

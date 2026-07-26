@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -20,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	xnethttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 const (
@@ -95,26 +95,23 @@ func StartBackground(ctx context.Context, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("start HTTPS control listener %s: %w", listenAddr, err)
 	}
-	srv := &http.Server{
-		Handler: controlplane.NewHandler(controlplane.HandlerOptions{
-			LoadRuntime: func() (controlplane.Runtime, error) {
-				return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
-			},
-			Heartbeat: hbStore,
-			HAStore:   haStore,
-			ReloadHA: func(store *ha.Store) error {
-				fresh, err := LoadHAReplication(config.ConfigPath(layout.ServerConfigFileName))
-				if err != nil {
-					return err
-				}
-				return store.Refresh(fresh.Peers(), fresh.Committed())
-			},
-			Acknowledge: func(userLabel string, generation int) error {
-				return AcknowledgeCredential(context.Background(), userLabel, generation)
-			},
-		}),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := xnethttp.NewServer(controlplane.NewHandler(controlplane.HandlerOptions{
+		LoadRuntime: func() (controlplane.Runtime, error) {
+			return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
+		},
+		Heartbeat: hbStore,
+		HAStore:   haStore,
+		ReloadHA: func(store *ha.Store) error {
+			fresh, err := LoadHAReplication(config.ConfigPath(layout.ServerConfigFileName))
+			if err != nil {
+				return err
+			}
+			return store.Refresh(fresh.Peers(), fresh.Committed())
+		},
+		Acknowledge: func(userLabel string, generation int) error {
+			return AcknowledgeCredential(context.Background(), userLabel, generation)
+		},
+	}), xnethttp.ServerOptions{})
 	go func() {
 		err := srv.ServeTLS(ln, certPath, keyPath)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
@@ -123,7 +120,10 @@ func StartBackground(ctx context.Context, opts Options) error {
 	}()
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
+		if err := srv.ShutdownOwned(ln); err != nil {
+			logging.Warn("HTTPS control server shutdown timed out", "err", err)
+		}
+		logServerMetrics("HTTPS control server stopped", srv.Metrics())
 		shutdown()
 	}()
 
@@ -148,10 +148,7 @@ func StartStandaloneDiagnostics(ctx context.Context, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("start HTTPS diagnostics listener %s: %w", listenAddr, err)
 	}
-	srv := &http.Server{
-		Handler:           controlplane.NewDiagnosticsHandler(controlplane.DiagnosticsOptions{}),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := xnethttp.NewServer(controlplane.NewDiagnosticsHandler(controlplane.DiagnosticsOptions{}), xnethttp.ServerOptions{})
 	go func() {
 		err := srv.ServeTLS(ln, certPath, keyPath)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
@@ -160,10 +157,23 @@ func StartStandaloneDiagnostics(ctx context.Context, opts Options) error {
 	}()
 	go func() {
 		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-		_ = ln.Close()
+		if err := srv.ShutdownOwned(ln); err != nil {
+			logging.Warn("HTTPS diagnostics server shutdown timed out", "err", err)
+		}
+		logServerMetrics("HTTPS diagnostics server stopped", srv.Metrics())
 	}()
 	return nil
+}
+
+func logServerMetrics(message string, metrics xnethttp.ServerMetrics) {
+	logging.Info(message,
+		"connections_new", metrics.New,
+		"connections_active", metrics.Active,
+		"connections_idle", metrics.Idle,
+		"connections_closed", metrics.Closed,
+		"connections_current", metrics.Current,
+		"connections_peak", metrics.Peak,
+	)
 }
 
 func resolveStandaloneTLS(opts Options) (string, string, error) {

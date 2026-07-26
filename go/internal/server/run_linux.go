@@ -162,16 +162,12 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			if !tunEnabled {
 				return nil
 			}
-			go func() {
-				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-					logging.Warn("tun address setup failed", "interface", opts.TunName, "err", err)
-				}
-			}()
-			go func() {
-				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-					logging.Warn("redirect route setup failed", "err", err)
-				}
-			}()
+			if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+				return fmt.Errorf("set up tun address: %w", err)
+			}
+			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
+				return fmt.Errorf("set up redirect routes: %w", err)
+			}
 			return nil
 		},
 		func(readyCtx context.Context) error {

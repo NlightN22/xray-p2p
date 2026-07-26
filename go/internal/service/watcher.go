@@ -13,10 +13,12 @@ import (
 )
 
 type pathWatcher struct {
-	w      *fsnotify.Watcher
-	paths  []string
-	events chan string
-	once   sync.Once
+	w       *fsnotify.Watcher
+	paths   []string
+	events  chan string
+	once    sync.Once
+	done    chan struct{}
+	started bool
 }
 
 func newPathWatcher(paths []string) (*pathWatcher, error) {
@@ -32,6 +34,7 @@ func newPathWatcher(paths []string) (*pathWatcher, error) {
 	watcher := &pathWatcher{
 		w:      w,
 		events: make(chan string, 16),
+		done:   make(chan struct{}),
 	}
 
 	for _, path := range uniquePaths(paths) {
@@ -56,10 +59,12 @@ func newPathWatcher(paths []string) (*pathWatcher, error) {
 	}
 
 	go watcher.run()
+	watcher.started = true
 	return watcher, nil
 }
 
 func (p *pathWatcher) run() {
+	defer close(p.done)
 	defer close(p.events)
 	for {
 		select {
@@ -88,6 +93,9 @@ func (p *pathWatcher) run() {
 func (p *pathWatcher) Close() error {
 	p.once.Do(func() {
 		_ = p.w.Close()
+		if p.started {
+			<-p.done
+		}
 	})
 	return nil
 }

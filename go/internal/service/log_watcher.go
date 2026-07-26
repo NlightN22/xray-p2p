@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -63,7 +64,10 @@ func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (func(), error) 
 	}
 
 	stop := make(chan struct{})
+	done := make(chan struct{})
+	var stopOnce sync.Once
 	go func() {
+		defer close(done)
 		defer func() {
 			if pathWatcher != nil {
 				_ = pathWatcher.Close()
@@ -109,7 +113,8 @@ func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (func(), error) 
 	}()
 
 	return func() {
-		close(stop)
+		stopOnce.Do(func() { close(stop) })
+		<-done
 	}, nil
 }
 

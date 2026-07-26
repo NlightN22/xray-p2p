@@ -53,7 +53,15 @@ func DisableIPv6BindingWithRetry(ctx context.Context, adapterName string) {
 				logging.Warn("IPv6 binding disable skipped (interface not found)", "interface", name)
 				return
 			}
-			time.Sleep(ipv6DisablePollInterval)
+			timer := time.NewTimer(ipv6DisablePollInterval)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case <-timer.C:
+			}
 		case ipv6ResultDisabled:
 			logging.Info("IPv6 binding disabled", "interface", name, "component", ipv6ComponentID)
 			return

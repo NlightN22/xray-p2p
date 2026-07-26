@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
@@ -43,9 +44,45 @@ func (s *deployServer) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
-
 	results := make(chan runSignal, 4)
+	stopAccept := make(chan struct{})
+	var acceptWG sync.WaitGroup
+	acceptWG.Add(1)
+	go func() {
+		defer acceptWG.Done()
+		select {
+		case <-ctx.Done():
+			_ = ln.Close()
+		case <-stopAccept:
+		}
+	}()
+	defer func() {
+		close(stopAccept)
+		acceptWG.Wait()
+	}()
+	handlerCtx, cancelHandlers := context.WithCancel(ctx)
+	var handlers sync.WaitGroup
+	var connections sync.Map
+	defer func() {
+		_ = ln.Close()
+		cancelHandlers()
+		connections.Range(func(key, _ any) bool {
+			_ = key.(net.Conn).Close()
+			return true
+		})
+		handlersDone := make(chan struct{})
+		go func() {
+			handlers.Wait()
+			close(handlersDone)
+		}()
+		for {
+			select {
+			case <-results:
+			case <-handlersDone:
+				return
+			}
+		}
+	}()
 
 	idleTimer := time.NewTimer(s.Timeout)
 	defer idleTimer.Stop()
@@ -190,13 +227,22 @@ func (s *deployServer) Run(ctx context.Context) error {
 		}
 		conn, err := ln.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				continue
 			}
 			return err
 		}
 
-		go s.handleConn(ctx, conn, results)
+		handlers.Add(1)
+		connections.Store(conn, struct{}{})
+		go func() {
+			defer handlers.Done()
+			defer connections.Delete(conn)
+			s.handleConn(handlerCtx, conn, results)
+		}()
 	}
 }
 
