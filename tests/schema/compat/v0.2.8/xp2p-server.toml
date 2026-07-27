@@ -1,0 +1,101 @@
+[logging]
+level = "info"
+format = "text"
+
+[server]
+port = "443"
+trojan_port = "443"
+profile = "trojan-tls"
+install_dir = "/opt/xp2p"
+config_dir = "/etc/xp2p"
+mode = "tun"
+cert_store = "/etc/xp2p/certs"
+certificate = "/etc/xp2p/certs/server.crt"
+key = "/etc/xp2p/certs/server.key"
+host = "server.example.com"
+tun_enabled = true
+tun_name = "xp2p0"
+tun_mtu = 1500
+tun_addr = "10.10.0.1/24"
+ha_local_peer_id = "node-a"
+ha_identity_acl = "acl-a"
+ha_provisioned_resources = "resources-a"
+ha_redirect_keys = ["redirect-a"]
+
+[server.identity_provider]
+instance_id = "idp-a"
+kind = "ldap"
+secret = "secret"
+interval = "30s"
+max_cache_age = "1h"
+group_ids = ["admins"]
+
+[server.identity_provider.ldap]
+url = "ldaps://ldap.example.com"
+base_dn = "dc=example,dc=com"
+bind_dn = "cn=reader,dc=example,dc=com"
+user_filter = "(uid={user})"
+group_filter = "(member={dn})"
+subject_attribute = "uid"
+membership_attribute = "memberOf"
+display_name_attribute = "displayName"
+page_size = 100
+timeout = "5s"
+insecure_tls = false
+
+[[server.users]]
+user_label = "alice"
+active_credential = "credential-a"
+previous_credential_for_rotation = "credential-old"
+rotation_expires_at = "2026-01-01T00:00:00Z"
+credential_generation = 2
+credential = "legacy"
+disabled = false
+
+[server.users.metadata]
+group = "admins"
+
+[[server.server_redirects]]
+domain = "app.internal"
+outbound_tag = "direct"
+access = "all"
+
+[server.reverse_channels.work]
+user_id = "alice"
+host = "10.30.0.10"
+tag = "reverse-work"
+domain = "work.internal"
+
+[[server.forward_rules]]
+listen_address = "127.0.0.1"
+listen_port = 18080
+target_host = "10.30.0.10"
+target_port = 80
+protocol = "tcp"
+tag = "web"
+remark = "web forward"
+
+[server.ha_generation]
+number = 1
+tombstones = ["old"]
+
+[[server.ha_peers]]
+id = "node-b"
+endpoint = "https://node-b.example.com"
+allow_insecure = false
+witness = false
+non_voting = false
+secret = "peer-secret"
+
+[[server.trojan_users]]
+email = "legacy@example.com"
+password = "legacy-secret"
+disabled = false
+
+[xray_assets]
+stale_after = "24h"
+
+[[xray_assets.files]]
+name = "geoip.dat"
+url = "https://example.com/geoip.dat"
+stale_after = "24h"

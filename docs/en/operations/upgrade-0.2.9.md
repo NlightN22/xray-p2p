@@ -17,6 +17,13 @@ Legacy flat tunnel fields also remain compatibility-normalized in 0.2.9. Their
 planned rejection is deferred to 0.3.0, so upgrading to this release does not
 require rewriting existing Desired inputs.
 
+The network lifecycle changes do not alter configuration files, CLI contracts,
+service invocation defaults, or persisted state layouts. Existing clients
+remain protocol-compatible with upgraded servers, which bound abandoned idle
+connections from older clients. Upgrade clients as well to apply the complete
+client-side ownership and reuse fix. No manual resource cleanup or
+configuration migration is required.
+
 Upgrade both the client and the standalone sidecar to 0.2.9 to enable
 ping-only health. Older sidecars do not advertise the capability, so the client
 continues to require the full report and reports its `404` as

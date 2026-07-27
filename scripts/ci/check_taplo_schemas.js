@@ -122,6 +122,8 @@ function main() {
       "tests/schema/compat/v0.2.6/xp2p-server.toml",
       "tests/schema/compat/v0.2.7/xp2p-client.toml",
       "tests/schema/compat/v0.2.7/xp2p-server.toml",
+      "tests/schema/compat/v0.2.8/xp2p-client.toml",
+      "tests/schema/compat/v0.2.8/xp2p-server.toml",
     ];
     runTaploSyntaxCheck(validFiles);
     for (const file of validFiles) {

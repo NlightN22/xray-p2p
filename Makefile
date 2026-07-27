@@ -54,7 +54,7 @@ schema-test:
 	npm run lint:config-schema
 
 schema-compat:
-	npm run lint:config-schema -- tests/schema/compat/v0.2.6/xp2p-client.toml tests/schema/compat/v0.2.6/xp2p-server.toml tests/schema/compat/v0.2.7/xp2p-client.toml tests/schema/compat/v0.2.7/xp2p-server.toml
+	npm run lint:config-schema -- tests/schema/compat/v0.2.6/xp2p-client.toml tests/schema/compat/v0.2.6/xp2p-server.toml tests/schema/compat/v0.2.7/xp2p-client.toml tests/schema/compat/v0.2.7/xp2p-server.toml tests/schema/compat/v0.2.8/xp2p-client.toml tests/schema/compat/v0.2.8/xp2p-server.toml
 	go test ./go/internal/config ./go/internal/client ./go/internal/server ./go/internal/xrayconfig -run SchemaCompatibility
 
 test:
