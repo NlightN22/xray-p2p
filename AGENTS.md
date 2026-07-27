@@ -63,6 +63,14 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - For broad Go verification, use `make test` on Windows and `make test-wsl` for the Linux build view.
 - Run xray smoke tests only when the change touches xray API/runtime behavior or when explicitly requested; they require the `xray_smoke` build tag and a runnable xray binary.
 
+## Network resource lifecycle
+
+- Request helpers must accept an HTTP client dependency; they must not create clients or transports.
+- Long-running components must own, reuse, prune, and shut down their network clients.
+- Create custom HTTP transports only through `go/internal/nethttp`.
+- Add resource plateau evidence for every periodic network flow.
+- Construct HTTP servers through the shared infrastructure builder so idle time is bounded.
+
 ## Services and runtime behavior
 
 - System services (`systemd`, `procd`, `Windows SCM`) must not rely on CLI flags.

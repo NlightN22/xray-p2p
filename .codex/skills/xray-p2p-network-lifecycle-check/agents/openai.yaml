@@ -1,0 +1,4 @@
+interface:
+  display_name: "Xray P2P Network Lifecycle Check"
+  short_description: "Audit ownership and shutdown of network resources"
+  default_prompt: "Use $xray-p2p-network-lifecycle-check to review this network-related change for ownership, reuse, shutdown, and resource plateau evidence."

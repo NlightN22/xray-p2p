@@ -29,6 +29,19 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Deployment packages: `go test ./go/internal/deploy` checks the embedded templates and archive layout.
 - When adding or modifying tests, use the shared failure dump helpers (for example `tests/host/openwrt/_helpers.dump_failure_state` or `tests/host/win/env.dump_failure_state`) instead of ad-hoc diagnostic dumps.
 
+### Network lifecycle review
+
+For changes to clients, servers, endpoints, background network flows, retries, or shutdown:
+
+- Where is each network resource created, and who owns it?
+- When and how is it closed, including timeout, cancellation, and recovery paths?
+- Is it reused between iterations, with stale resources pruned?
+- Does every response path bound reads or drains and close the body?
+- Does a periodic flow include resource plateau evidence?
+- Do server-side idle limits contain faulty or disconnected peers?
+
+Run `make http-lifecycle-check` and the focused lifecycle tests for the affected package. Run `make resource-plateau` when a periodic control-plane flow changes.
+
 ## Persisted data compatibility
 
 Use the normalization pipeline for xp2p-owned persisted data that can evolve over time, including TOML configuration, JSON state files, and future xp2p-owned metadata. Do not use it for Xray JSON because that is an external runtime format.

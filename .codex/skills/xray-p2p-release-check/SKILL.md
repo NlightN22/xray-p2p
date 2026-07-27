@@ -11,8 +11,15 @@ Run each stage from the repository root and stop immediately on failure.
 
 1. Run `python scripts/new_release.py check` before the final merge.
 2. Report all working-tree changes shown by the command.
-3. Require schema drift checks, current schema fixtures, compatibility fixtures, the full Linux Go test view, and the full Linux host gate to pass.
-4. Do not change the version, commit, tag, or push during this stage.
+3. Run `make http-lifecycle-check` and require it to pass. Inspect all
+   `nethttp-lifecycle:allow` directives changed since the previous release and
+   stop on any exclusion that lacks a concrete owner, lifetime, and reason.
+4. Run `make resource-plateau-nightly` and require the accelerated five-client
+   control-plane plateau gate to pass for the exact release candidate SHA.
+   Preserve and report the timestamped diagnostic log and workflow artifact.
+5. Require schema drift checks, current schema fixtures, compatibility fixtures,
+   the full Linux Go test view, and the full Linux host gate to pass.
+6. Do not change the version, commit, tag, or push during this stage.
 
 ## Schema compatibility gate
 
