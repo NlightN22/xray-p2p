@@ -21,6 +21,7 @@ func (f schedulerFetcher) FetchSnapshot(ctx context.Context, provider identitysy
 }
 
 func TestIdentitySchedulerStopCancelsAndJoinsActiveSync(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	previous := IdentitySnapshotFetcher
 	t.Cleanup(func() { IdentitySnapshotFetcher = previous })
 	started := make(chan struct{})
@@ -51,6 +52,7 @@ func TestIdentitySchedulerStopCancelsAndJoinsActiveSync(t *testing.T) {
 }
 
 func TestIdentitySchedulerStopReportsDeadline(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	previous := IdentitySnapshotFetcher
 	t.Cleanup(func() { IdentitySnapshotFetcher = previous })
 	started := make(chan struct{})
@@ -78,6 +80,7 @@ func TestIdentitySchedulerStopReportsDeadline(t *testing.T) {
 }
 
 func TestIdentitySchedulerConcurrentStopCallsCancelAndJoinOnce(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	previous := IdentitySnapshotFetcher
 	t.Cleanup(func() { IdentitySnapshotFetcher = previous })
 	started := make(chan struct{})
