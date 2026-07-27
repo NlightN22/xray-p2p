@@ -17,12 +17,12 @@ EXTRA_CLIENTS = 3
 
 
 @contextmanager
-def extra_client_sessions(env: dict, host):
+def extra_client_sessions(env: dict, host, *, accelerated: bool):
     _create_network(env, host)
     sessions = []
     try:
         for index in range(EXTRA_CLIENTS):
-            sessions.append(_start_client(env, host, index))
+            sessions.append(_start_client(env, host, index, accelerated))
         yield sessions
     finally:
         for session in reversed(sessions):
@@ -65,7 +65,7 @@ def _create_network(env: dict, host) -> None:
         pytest.fail(f"nightly client server route failed: {route.stderr}")
 
 
-def _start_client(env: dict, host, index: int) -> dict:
+def _start_client(env: dict, host, index: int, accelerated: bool) -> dict:
     ns = _namespace(index)
     root = f"/tmp/xp2p-plateau-client-{index}"
     metrics = f"{root}/runtime.metrics"
@@ -89,9 +89,15 @@ def _start_client(env: dict, host, index: int) -> dict:
     result = host.run(setup)
     if result.rc != 0:
         pytest.fail(f"nightly client {index} install failed: {result.stderr}")
+    test_env = (
+        "XP2P_TEST_MODE=1 XP2P_TEST_HEARTBEAT_INTERVAL=250ms "
+        "XP2P_TEST_SUBSCRIPTION_INTERVAL=250ms "
+        if accelerated else ""
+    )
     start = (
         f"sudo -n ip netns exec {ns} env XP2P_CONFIG_ROOT={root} XP2P_LOG_ROOT={root}/logs "
         f"XP2P_RUNTIME_METRICS_FILE={metrics} XP2P_RUNTIME_METRICS_INTERVAL=1s "
+        f"{test_env}"
         f"nohup /usr/bin/xp2p client run --path {root} --config-dir config-client "
         f"--auto-install --quiet >/tmp/xp2p-plateau-client-{index}.log 2>&1 & echo $!"
     )

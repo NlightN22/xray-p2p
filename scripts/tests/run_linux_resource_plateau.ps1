@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("quick", "nightly")]
+    [ValidateSet("quick", "nightly", "soak")]
     [string] $Profile = "quick"
 )
 

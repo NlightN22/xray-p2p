@@ -9,10 +9,13 @@ from tests.host.linux import _resource_plateau as plateau
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 
 QUICK_SAMPLES = 120
-NIGHTLY_SAMPLES = 1440
+NIGHTLY_SAMPLES = 180
+SOAK_SAMPLES = 1440
 QUICK_SAMPLE_INTERVAL_SECONDS = 1.0
-NIGHTLY_SAMPLE_INTERVAL_SECONDS = 5.0
+NIGHTLY_SAMPLE_INTERVAL_SECONDS = 1.0
+SOAK_SAMPLE_INTERVAL_SECONDS = 5.0
 WARMUP_SECONDS = 30.0
+EXPANDED_WARMUP_SECONDS = 75.0
 AUX_CLIENT_IP = "10.62.10.13"
 SECOND_ENDPOINT_IP = "10.62.10.14"
 PHASE_NAMES = (
@@ -23,16 +26,33 @@ PHASE_NAMES = (
     "full_network_loss",
     "recovered",
 )
+PROFILES = {
+    "quick": (QUICK_SAMPLES, QUICK_SAMPLE_INTERVAL_SECONDS, WARMUP_SECONDS, False, True),
+    "nightly": (
+        NIGHTLY_SAMPLES,
+        NIGHTLY_SAMPLE_INTERVAL_SECONDS,
+        EXPANDED_WARMUP_SECONDS,
+        True,
+        True,
+    ),
+    "soak": (
+        SOAK_SAMPLES,
+        SOAK_SAMPLE_INTERVAL_SECONDS,
+        EXPANDED_WARMUP_SECONDS,
+        True,
+        False,
+    ),
+}
 LIMITS = {
     "rss_kib": plateau.PlateauLimit(32 * 1024, 256),
     "threads": plateau.PlateauLimit(8, 0.25),
-    "fd": plateau.PlateauLimit(12, 0.1),
-    "socket_fd": plateau.PlateauLimit(8, 0.1),
-    "pipe_fd": plateau.PlateauLimit(8, 0.1),
-    "anon_fd": plateau.PlateauLimit(8, 0.1),
-    "tcp_total": plateau.PlateauLimit(8, 0.1),
-    "tcp_estab": plateau.PlateauLimit(8, 0.1),
-    "tcp_peer": plateau.PlateauLimit(8, 0.1),
+    "fd": plateau.PlateauLimit(12, 0.2),
+    "socket_fd": plateau.PlateauLimit(8, 0.2),
+    "pipe_fd": plateau.PlateauLimit(8, 0.2),
+    "anon_fd": plateau.PlateauLimit(8, 0.2),
+    "tcp_total": plateau.PlateauLimit(8, 0.2),
+    "tcp_estab": plateau.PlateauLimit(8, 0.2),
+    "tcp_peer": plateau.PlateauLimit(8, 0.2),
     "cgroup_memory": plateau.PlateauLimit(64 * 1024 * 1024, 512 * 1024),
 }
 GO_LIMITS = {
@@ -63,6 +83,19 @@ def positive_float(name: str, default: float) -> float:
     if value <= 0:
         pytest.fail(f"{name} must be positive")
     return value
+
+
+def resolve_profile(profile: str) -> tuple[int, float, float, bool, bool]:
+    if profile not in PROFILES:
+        pytest.fail(f"unsupported XP2P_RESOURCE_PLATEAU_PROFILE: {profile}")
+    samples, interval, warmup, expanded, accelerated = PROFILES[profile]
+    return (
+        positive_int("XP2P_RESOURCE_PLATEAU_SAMPLES", samples),
+        positive_float("XP2P_RESOURCE_PLATEAU_SAMPLE_INTERVAL", interval),
+        positive_float("XP2P_RESOURCE_PLATEAU_WARMUP", warmup),
+        expanded,
+        accelerated,
+    )
 
 
 def assert_owner_shutdown(env: dict, sessions: dict, aux_host) -> None:

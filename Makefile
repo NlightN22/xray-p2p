@@ -25,7 +25,7 @@ WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
 	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map \
-	resource-plateau resource-plateau-nightly
+	resource-plateau resource-plateau-nightly resource-plateau-soak
 
 build: $(TARGETS:%=build-%)
 
@@ -83,6 +83,9 @@ resource-plateau:
 
 resource-plateau-nightly:
 	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tests/run_linux_resource_plateau.ps1 -Profile nightly
+
+resource-plateau-soak:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tests/run_linux_resource_plateau.ps1 -Profile soak
 
 up-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up

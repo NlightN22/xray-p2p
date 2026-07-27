@@ -22,6 +22,7 @@ on:
         options:
           - quick
           - nightly
+          - soak
 
 concurrency:
   group: resource-plateau-vagrant
@@ -32,7 +33,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, xp2p-vagrant]
     timeout-minutes: 600
     env:
-      XP2P_RESOURCE_PLATEAU_PROFILE: ${{ github.event_name == 'schedule' && 'nightly' || inputs.profile }}
+      XP2P_RESOURCE_PLATEAU_PROFILE: ${{ github.event_name == 'schedule' && 'soak' || inputs.profile }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -24,19 +24,11 @@ tunnel_environment = fixture.tunnel_environment
 )
 def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
     env = tunnel_environment
-    nightly = os.environ.get("XP2P_RESOURCE_PLATEAU_PROFILE") == "nightly"
-    sample_count = gate.positive_int(
-        "XP2P_RESOURCE_PLATEAU_SAMPLES",
-        gate.NIGHTLY_SAMPLES if nightly else gate.QUICK_SAMPLES,
+    profile = os.environ.get("XP2P_RESOURCE_PLATEAU_PROFILE", "quick")
+    sample_count, sample_interval, warmup, expanded_topology, accelerated = (
+        gate.resolve_profile(profile)
     )
-    sample_interval = gate.positive_float(
-        "XP2P_RESOURCE_PLATEAU_SAMPLE_INTERVAL",
-        gate.NIGHTLY_SAMPLE_INTERVAL_SECONDS if nightly else gate.QUICK_SAMPLE_INTERVAL_SECONDS,
-    )
-    warmup = gate.positive_float("XP2P_RESOURCE_PLATEAU_WARMUP", gate.WARMUP_SECONDS)
-
-    payload = {"profile": "nightly" if nightly else "quick", "samples": {}, "assessments": {}}
-    sessions = None
+    payload = {"profile": profile, "samples": {}, "assessments": {}}
     try:
         aux_runner = fixture.runner(aux_host)
         aux_credential = env["server_runner"](
@@ -67,7 +59,7 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                 fixture.active_tunnel_sessions(
                     env,
                     runtime_metrics=True,
-                    test_heartbeat_interval="" if nightly else "250ms",
+                    test_heartbeat_interval="250ms" if accelerated else "",
                     server_process_env={
                         "XP2P_TEST_MODE": "1",
                         "XP2P_TEST_CONTROL_STATUS_FILE": scenarios.CONTROL_STATUS_FILE,
@@ -75,7 +67,7 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                     client_process_env={
                         "XP2P_TEST_MODE": "1",
                         "XP2P_TEST_SUBSCRIPTION_INTERVAL": "250ms",
-                    } if not nightly else None,
+                    } if accelerated else None,
                 )
             )
             aux_session = stack.enter_context(
@@ -85,13 +77,22 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                     helpers.INSTALL_ROOT.as_posix(),
                     helpers.CLIENT_CONFIG_DIR_NAME,
                     runtime_metrics_file="/tmp/xp2p-client-runtime.metrics",
+                    test_heartbeat_interval="250ms" if accelerated else "",
+                    process_env={
+                        "XP2P_TEST_MODE": "1",
+                        "XP2P_TEST_SUBSCRIPTION_INTERVAL": "250ms",
+                    } if accelerated else None,
                 )
             )
             aux_session["runtime_metrics"] = "/tmp/xp2p-client-runtime.metrics"
             aux_session["xray_pid"] = plateau.xray_pid(aux_host)
             extra_clients = (
-                stack.enter_context(nightly_topology.extra_client_sessions(env, aux_host))
-                if nightly
+                stack.enter_context(
+                    nightly_topology.extra_client_sessions(
+                        env, aux_host, accelerated=accelerated
+                    )
+                )
+                if expanded_topology
                 else []
             )
             time.sleep(warmup)
@@ -128,7 +129,7 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
                 "client_count": 2 + len(extra_clients),
                 "mixed_legacy_clients": "unsupported: no legacy binary fixture is available",
             }
-            assert payload["topology"]["client_count"] == (5 if nightly else 2)
+            assert payload["topology"]["client_count"] == (5 if expanded_topology else 2)
             payload["samples"] = {name: [] for name in owners}
             phase_count = sample_count // len(gate.PHASE_NAMES)
             if phase_count < 3:
