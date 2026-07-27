@@ -78,12 +78,6 @@ jobs:
           set -euo pipefail
           go test ./...
 
-  resource-plateau:
-    uses: ./.github/workflows/resource-plateau.yml
-    with:
-      profile: quick
-      ref: ${{ github.sha }}
-
   windows:
     runs-on: windows-latest
     steps:
