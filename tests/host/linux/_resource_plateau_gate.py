@@ -39,7 +39,11 @@ GO_LIMITS = {
     "go_heap_alloc": plateau.PlateauLimit(32 * 1024 * 1024, 256 * 1024),
     "go_heap_sys": plateau.PlateauLimit(32 * 1024 * 1024, 256 * 1024),
     "go_goroutines": plateau.PlateauLimit(16, 0.1),
+}
+CLIENT_GO_LIMITS = {
     "control_http_clients": plateau.PlateauLimit(4, 0.1),
+}
+SERVER_GO_LIMITS = {
     "control_connections_active": plateau.PlateauLimit(8, 0.1),
     "control_connections_idle": plateau.PlateauLimit(8, 0.1),
     "control_connections_current": plateau.PlateauLimit(8, 0.1),
@@ -100,7 +104,12 @@ def assess_phases(payload: dict) -> None:
         payload["assessments"][phase] = {}
         for owner, samples in payload["samples"].items():
             phase_samples = samples[bounds["start"] : bounds["end"]]
-            limits = LIMITS | (GO_LIMITS if owner.endswith("_xp2p") else {})
+            limits = LIMITS
+            if owner.endswith("_xp2p"):
+                limits = limits | GO_LIMITS
+                limits = limits | (
+                    SERVER_GO_LIMITS if owner == "server_xp2p" else CLIENT_GO_LIMITS
+                )
             peer_metrics = {
                 key
                 for sample in phase_samples
@@ -110,9 +119,22 @@ def assess_phases(payload: dict) -> None:
             limits = limits | {key: LIMITS["tcp_peer"] for key in peer_metrics}
             payload["assessments"][phase][owner] = {}
             for metric, limit in limits.items():
+                dynamic_peer = metric.startswith("tcp_peer_")
+                if not dynamic_peer:
+                    missing = [
+                        index for index, sample in enumerate(phase_samples)
+                        if metric not in sample
+                    ]
+                    if missing:
+                        raise AssertionError(
+                            f"{phase}/{owner}/{metric}: metric missing from samples {missing}"
+                        )
                 try:
                     result = plateau.assess(
-                        [sample.get(metric, 0) for sample in phase_samples],
+                        [
+                            sample.get(metric, 0) if dynamic_peer else sample[metric]
+                            for sample in phase_samples
+                        ],
                         limit,
                     )
                 except AssertionError as exc:

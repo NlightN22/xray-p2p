@@ -22,9 +22,12 @@ $testTargets = @(
 
 Push-Location $repoRoot
 try {
-    pytest @testTargets -vv -s 2>&1 | Tee-Object -FilePath $logPath
+    $pytestOutput = @(pytest @testTargets -vv -s 2>&1 | Tee-Object -FilePath $logPath)
     if ($LASTEXITCODE -ne 0) {
         throw "Linux resource plateau suite failed with exit code $LASTEXITCODE. Log: $logPath"
+    }
+    if (($pytestOutput -join "`n") -notmatch "\b[1-9][0-9]* passed\b") {
+        throw "Linux resource plateau suite did not execute any passing tests. Log: $logPath"
     }
 } finally {
     Pop-Location

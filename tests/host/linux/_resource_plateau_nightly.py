@@ -96,21 +96,46 @@ def _start_client(env: dict, host, index: int) -> dict:
         f"--auto-install --quiet >/tmp/xp2p-plateau-client-{index}.log 2>&1 & echo $!"
     )
     result = host.run(start)
-    pid = int((result.stdout or "").strip())
-    time.sleep(2)
-    if host.run(f"sudo -n kill -0 {pid}").rc != 0:
-        pytest.fail(f"nightly client {index} exited during startup")
-    xray = host.run(f"pgrep -P {pid} -x xray | head -n1")
-    if xray.rc != 0 or not (xray.stdout or "").strip():
-        pytest.fail(f"nightly client {index} xray child was not found")
+    wrapper_pid = int((result.stdout or "").strip())
+    pid = _wait_for_metrics_pid(host, index, wrapper_pid, metrics)
+    xray_pid = _wait_for_xray(host, index, pid, root)
     return {
         "host": host,
         "pid": pid,
-        "xray_pid": int(xray.stdout.strip()),
+        "xray_pid": xray_pid,
         "runtime_metrics": metrics,
         "peer": fixture.SERVER_IP,
         "source_ip": f"10.63.0.{10 + index}",
     }
+
+
+def _wait_for_metrics_pid(host, index: int, wrapper_pid: int, metrics: str) -> int:
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        if host.run(f"sudo -n kill -0 {wrapper_pid}").rc != 0:
+            pytest.fail(f"nightly client {index} exited during startup")
+        result = host.run(
+            f"sudo -n awk -F= '$1 == \"pid\" {{print $2}}' {metrics}"
+        )
+        if result.rc == 0 and (result.stdout or "").strip():
+            return int(result.stdout.strip())
+        time.sleep(0.5)
+    pytest.fail(f"nightly client {index} runtime metrics were not published")
+
+
+def _wait_for_xray(host, index: int, pid: int, root: str) -> int:
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        if host.run(f"sudo -n kill -0 {pid}").rc != 0:
+            pytest.fail(f"nightly client {index} exited during startup")
+        xray = host.run(f"sudo -n pgrep -f '{root}/bin/[x]ray' | head -n1")
+        if xray.rc == 0 and (xray.stdout or "").strip():
+            return int(xray.stdout.strip())
+        time.sleep(0.5)
+    log = host.run(f"sudo -n tail -n 100 /tmp/xp2p-plateau-client-{index}.log")
+    pytest.fail(
+        f"nightly client {index} xray child was not found\n{log.stdout}\n{log.stderr}"
+    )
 
 
 def _wait_for_shutdown(env: dict, host, sessions: list[dict]) -> None:

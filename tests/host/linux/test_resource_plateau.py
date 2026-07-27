@@ -138,12 +138,11 @@ def test_control_plane_resources_reach_plateau(tunnel_environment, aux_host):
             env["server_runner"]("server", "user", "rotate", env["client_user"], check=True)
             gate.collect_phase(payload, "rotation_pending", owners, phase_count, sample_interval)
             scenarios.set_control_status(env, 503)
-            non_200_count = [0]
-            time.sleep(1)
+            non_200_count = scenarios.control_status_count(env)
             gate.collect_phase(
                 payload, "non_200", owners, phase_count, sample_interval,
-                before_sample=lambda _index: scenarios.assert_xp2p_non_200(env, non_200_count),
             )
+            scenarios.assert_xp2p_non_200(env, non_200_count)
             scenarios.set_control_status(env, None)
             with netem.netem_degradation(
                 env["client_host"],

@@ -60,12 +60,18 @@ def set_control_status(env: dict, status: int | None) -> None:
         pytest.fail(f"failed to enable control status fault: {result.stderr}")
 
 
-def assert_xp2p_non_200(env: dict, previous: list[int]) -> None:
+def control_status_count(env: dict) -> int:
     result = env["server_host"].run(f"sudo -n cat {CONTROL_STATUS_FILE}.count")
-    count = int((result.stdout or "0").strip() or "0") if result.rc == 0 else 0
-    if count <= previous[0]:
-        pytest.fail(f"XP2P client did not receive another non-200 response: count={count}")
-    previous[0] = count
+    return int((result.stdout or "0").strip() or "0") if result.rc == 0 else 0
+
+
+def assert_xp2p_non_200(env: dict, previous: int) -> None:
+    count = control_status_count(env)
+    if count <= previous:
+        pytest.fail(
+            "XP2P client did not receive a non-200 response during the phase: "
+            f"before={previous}, after={count}"
+        )
 
 
 def heartbeat_attempts(host) -> dict[str, int]:

@@ -33,6 +33,36 @@ def test_process_sampling_fails_closed_when_pid_disappears(client_host):
         plateau.process_sample(client_host, 999999, fixture.SERVER_IP)
 
 
+@pytest.mark.parametrize(
+    ("owner", "missing"),
+    [
+        ("client_xp2p", "control_http_clients"),
+        ("server_xp2p", "control_connections_current"),
+    ],
+)
+def test_phase_gate_rejects_missing_owner_metric(owner, missing):
+    metrics = {
+        name: 1
+        for name in gate.LIMITS
+    } | {
+        name: 1
+        for name in gate.GO_LIMITS
+    }
+    metrics |= {
+        name: 1
+        for name in (
+            gate.SERVER_GO_LIMITS if owner == "server_xp2p" else gate.CLIENT_GO_LIMITS
+        )
+    }
+    del metrics[missing]
+    payload = {
+        "samples": {owner: [metrics.copy() for _ in range(3)]},
+        "phases": {"stable": {"start": 0, "end": 3}},
+    }
+    with pytest.raises(AssertionError, match=f"{owner}/{missing}: metric missing"):
+        gate.assess_phases(payload)
+
+
 def test_integration_gate_rejects_xp2p_control_transport_leak(tunnel_environment):
     env = tunnel_environment
     scenarios.set_control_status(env, 503)
