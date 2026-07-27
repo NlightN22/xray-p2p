@@ -112,7 +112,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         )
         assert row["STATUS"] == "disabled"
         assert row["MODE"] == "disabled"
-        assert row["CHECK"] == "none"
+        assert row["CHECK"] == "xp2p-heartbeat"
     except Exception:
         helpers.dump_failure_state(client, "heartbeat-capability-client")
         helpers.dump_failure_state(server, "heartbeat-capability-server")

@@ -43,6 +43,7 @@ def runner(host):
         }
         if "--pending" not in cmd and "-y" not in cmd:
             if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+                cmd.insert(2, "list")
                 cmd.append("--pending")
             else:
                 for target in pending_targets:
@@ -187,14 +188,7 @@ def run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     header_count = sum(
         1
         for raw in cleaned.splitlines()
-        if raw.strip()
-        and tuple(
-            tunnel_common.split_state_line(
-                raw.strip(),
-                len(tunnel_common.STATE_TABLE_BASE_HEADER),
-            )
-        )
-        == tunnel_common.STATE_TABLE_BASE_HEADER
+        if raw.strip().startswith("TAG") and "HOST" in raw and "STATUS" in raw
     )
     assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
     assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"

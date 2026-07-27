@@ -393,6 +393,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         redirect_list = xp2p_client_runner(
             "client",
             "redirect",
+            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -418,6 +419,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         redirect_list_after_remove = xp2p_client_runner(
             "client",
             "redirect",
+            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -501,6 +503,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             redirect_list_after = xp2p_client_runner(
                 "client",
                 "redirect",
+                "list",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
@@ -547,6 +550,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             redirect_debug = xp2p_client_runner(
                 "client",
                 "redirect",
+                "list",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",

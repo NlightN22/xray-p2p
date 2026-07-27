@@ -1,0 +1,70 @@
+name: release-validation
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact release commit SHA to verify
+        required: true
+        type: string
+
+concurrency:
+  group: resource-plateau-vagrant
+  cancel-in-progress: false
+
+jobs:
+  release-gates:
+    runs-on: [self-hosted, Windows, X64, xp2p-vagrant]
+    timeout-minutes: 900
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Verify checked out commit
+        shell: powershell
+        run: |
+          $actual = git rev-parse HEAD
+          if ($actual -ne "${{ inputs.ref }}") {
+              throw "Checked out $actual instead of requested release commit ${{ inputs.ref }}"
+          }
+
+      - name: Install Node dependencies
+        shell: powershell
+        run: npm ci
+
+      - name: Run static and compatibility gates
+        shell: powershell
+        run: |
+          make lint
+          make schema-compat
+
+      - name: Run native Windows Go tests
+        shell: powershell
+        run: make test
+
+      - name: Run WSL Go tests
+        shell: powershell
+        run: make test-wsl
+
+      - name: Start Linux test topology
+        shell: powershell
+        run: make up-deb12
+
+      - name: Run full Linux release suite
+        shell: powershell
+        run: scripts/tests/run_linux_release_gate.ps1
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-${{ github.run_id }}
+          path: .logs/tests/
+          if-no-files-found: error
+
+      - name: Halt Linux test topology
+        if: always()
+        shell: powershell
+        run: make halt-deb12

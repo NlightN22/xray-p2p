@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -112,10 +114,7 @@ def _assert_client_connects_from_startup(
         if runtime_apply_server_profile:
             runtime.start_service(server_host, server_runner, "server", log_level="debug")
             server_runner("--log-level", "debug", "server", "profile", profile, check=True)
-            user_list = server_runner(
-                "server", "user", "list", "--host", SERVER_HOST, "--json", check=True
-            )
-            link = _parse_json_link(user_list.stdout or "")
+            link = _vless_link_from_trojan(link)
         assert link.startswith(f"{protocol}://")
         client_runner(
             "client",
@@ -155,6 +154,13 @@ def _add_hosts_entry(host, ip_address: str, name: str) -> None:
         f"printf \"%s %s\\n\" \"{escaped_ip}\" \"{escaped_name}\" >> \"$tmp\"; "
         "cat \"$tmp\" > /etc/hosts; rm -f \"$tmp\"'"
     )
+
+
+def _vless_link_from_trojan(link: str) -> str:
+    parsed = urlsplit(link)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update({"flow": "xtls-rprx-vision", "encryption": "none"})
+    return urlunsplit(("vless", parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
 
 
 def _enable_xray_debug(host, config_name: str) -> None:

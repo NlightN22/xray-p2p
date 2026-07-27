@@ -1353,12 +1353,17 @@ def _wait_for_server_user_absent(
 
 
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
-    def _parse_json_link(text: str) -> str | None:
-        return cli_json.link(text)
+    def _extract_link(text: str) -> str | None:
+        for line in text.splitlines():
+            if "client deploy: link generated" not in line or "link:" not in line:
+                continue
+            return line.split("link:", 1)[1].strip()
+        return None
+
     link = _wait_for_log_value(
         host,
         log_path,
-        extractor=_parse_json_link,
+        extractor=_extract_link,
         description="xp2p client deploy link",
         timeout=LOG_WAIT_TIMEOUT,
     )

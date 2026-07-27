@@ -35,6 +35,7 @@ def _runner(host):
         }
         if "--pending" not in cmd and "-y" not in cmd:
             if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+                cmd.insert(2, "list")
                 cmd.append("--pending")
             else:
                 for target in pending_targets:

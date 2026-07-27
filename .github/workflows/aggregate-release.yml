@@ -52,15 +52,14 @@ jobs:
           sha="$(git rev-parse "refs/tags/${{ inputs.tag }}^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-  resource-plateau:
+  release-validation:
     needs: resolve-release-ref
-    uses: ./.github/workflows/resource-plateau.yml
+    uses: ./.github/workflows/release-validation.yml
     with:
-      profile: nightly
       ref: ${{ needs.resolve-release-ref.outputs.sha }}
 
   aggregate:
-    needs: [resolve-release-ref, resource-plateau]
+    needs: [resolve-release-ref, release-validation]
     runs-on: ubuntu-latest
     permissions:
       contents: write

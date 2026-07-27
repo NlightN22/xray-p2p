@@ -14,7 +14,10 @@ on:
       - "taplo.toml"
       - "tests/schema/**"
       - "distro/**"
+      - "Makefile"
+      - "tests/host/linux/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/resource-plateau.yml"
   pull_request:
     paths:
       - "go/**"
@@ -27,7 +30,10 @@ on:
       - "taplo.toml"
       - "tests/schema/**"
       - "distro/**"
+      - "Makefile"
+      - "tests/host/linux/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/resource-plateau.yml"
 
 jobs:
   linux:
@@ -64,13 +70,19 @@ jobs:
       - name: npm ci
         run: npm ci
 
-      - name: Taplo schema lint
-        run: npm run lint:config-schema
+      - name: Lint
+        run: make lint
 
-      - name: go test
+      - name: Full Linux Go test suite
         run: |
           set -euo pipefail
           go test ./...
+
+  resource-plateau:
+    uses: ./.github/workflows/resource-plateau.yml
+    with:
+      profile: quick
+      ref: ${{ github.sha }}
 
   windows:
     runs-on: windows-latest
