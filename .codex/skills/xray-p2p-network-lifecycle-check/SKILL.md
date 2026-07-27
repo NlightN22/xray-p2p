@@ -9,6 +9,9 @@ Audit the diff mechanically and identify the owner and bounded lifetime of every
 affected network resource. A request timeout is not a substitute for resource
 ownership, idle pruning, or shutdown.
 
+For a reproducible activation example and its recorded independent result, see
+[forward-test evidence](references/forward-test-evidence.md).
+
 ## Workflow
 
 1. Read the complete diff and

@@ -1,0 +1,41 @@
+diff --git a/go/internal/client/subscription_sync.go b/go/internal/client/subscription_sync.go
+index 11111111..22222222 100644
+--- a/go/internal/client/subscription_sync.go
++++ b/go/internal/client/subscription_sync.go
+@@ -1,3 +1,8 @@
+ func fetchSubscription(ctx context.Context, endpoint string) error {
++	client := &http.Client{Transport: &http.Transport{}}
++	resp, err := client.Get(endpoint)
++	if err != nil {
++		return err
++	}
++	return json.NewDecoder(resp.Body).Decode(&result)
+ }
+diff --git a/go/internal/diagnostics/ping/ping.go b/go/internal/diagnostics/ping/ping.go
+index 33333333..44444444 100644
+--- a/go/internal/diagnostics/ping/ping.go
++++ b/go/internal/diagnostics/ping/ping.go
+@@ -1,3 +1,5 @@
+ for ticker := time.NewTicker(interval); ; {
++	go probe(ctx, target)
+ }
+diff --git a/go/internal/server/ha_management.go b/go/internal/server/ha_management.go
+index 55555555..66666666 100644
+--- a/go/internal/server/ha_management.go
++++ b/go/internal/server/ha_management.go
+@@ -1,3 +1,4 @@
+ func commit(peer string) error {
++	return newInsecureClient().Post(peer, "application/json", body)
+ }
+diff --git a/go/internal/identitysync/config_fetcher.go b/go/internal/identitysync/config_fetcher.go
+index 77777777..88888888 100644
+--- a/go/internal/identitysync/config_fetcher.go
++++ b/go/internal/identitysync/config_fetcher.go
+@@ -1,3 +1,8 @@
+ func (f *ConfigFetcher) scimGet(url string) ([]byte, error) {
++	resp, err := (&http.Client{Timeout: time.Second}).Get(url)
++	if err != nil {
++		return nil, err
++	}
++	return io.ReadAll(resp.Body)
+ }
